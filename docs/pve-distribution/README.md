@@ -1,4 +1,4 @@
-﻿# BAR PVE distribution architecture
+# BAR PVE distribution architecture
 
 ## Observed local state (2026-10-27)
 
@@ -53,6 +53,8 @@ Do not edit the running SPADS configuration, official client data, launcher Prog
 
 ## Validation record: 2026-10-27
 
-Environment: Windows PowerShell 5.1, local temporary fixture packages, no running Spring process. Parsed both new scripts with PowerShell Parser and found no syntax errors. Installed fixture 0.1.0-dev.1 and 0.1.0-dev.2, rolled back to dev.1, and confirmed state.json active=dev.1. A dev.3 manifest with a deliberately wrong SHA-256 was rejected and left dev.1 active. The package builder rejected the empty recoil-lua-library submodule as intended.
+Environment: Windows PowerShell 5.1, local temporary fixture packages, no running Spring process. Parsed both new scripts with PowerShell Parser and found no syntax errors. Installed fixture 0.1.0-dev.1 and 0.1.0-dev.2, rolled back to dev.1, and confirmed state.json active=dev.1. A dev.3 manifest with a deliberately wrong SHA-256 was rejected and left dev.1 active. The recoil-lua-library submodule could not be cloned from GitHub due to a connection reset. A source scan found no runtime Lua references to that editor/library submodule, so packaging excludes it.
 
-This does not establish that Spring/unitsync can load the PVE game. No real package, GitHub Release, server pin, launcher selector, multiplayer version gate, or in-game update check has been deployed. Those require submodule initialization, archive recognition and isolated server/client runtime validation. Existing server configuration and friend-launcher business code were not changed.
+This establishes local Spring Headless recognition and a short simulation, but not unitsync recognition in SPADS or multiplayer compatibility. A local BAR-PVE-0.1.0-dev.1.sdz was built (2,014,864,011 bytes; SHA-256 06ce58c58991d4eb9f6759f5cfb00117a9fc38a2be5352e401c27b0020d375ab). A first smoke run found that UTF-8 BOM in modinfo.lua prevented game-name recognition; the file and builder were corrected. An isolated Spring Headless 2026.07.04 run then recognized BAR PVE 0.1.0-dev.1, reached frame 120, and exited 0. Headless-only DrawScreen Widget errors did not stop simulation. No GitHub Release, server pin, launcher selector, multiplayer version gate, or in-game update check has been deployed. Those require archive recognition and isolated server/client runtime validation. Existing server configuration and friend-launcher business code were not changed.
+
+The local .sdz is below the [GitHub Release 2 GiB per-asset limit](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases). The builder rejects larger output.

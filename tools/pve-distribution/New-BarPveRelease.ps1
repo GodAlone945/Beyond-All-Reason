@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$OutputDirectory,
     [Parameter(Mandatory = $true)][string]$ReleaseBaseUrl,
@@ -9,15 +9,17 @@ Set-StrictMode -Version Latest
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $source = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
+$modinfoBytes = [IO.File]::ReadAllBytes((Join-Path $source 'modinfo.lua'))
+if ($modinfoBytes.Length -lt 8 -or $modinfoBytes[0] -ne 114 -or $modinfoBytes[1] -ne 101) {
+    throw 'modinfo.lua must begin with plain UTF-8 return (no BOM).'
+}
 $modinfo = Get-Content -LiteralPath (Join-Path $source 'modinfo.lua') -Raw -Encoding UTF8
 $name = [regex]::Match($modinfo, "(?m)^\s*name\s*=\s*'([^']+)'").Groups[1].Value
 $version = [regex]::Match($modinfo, "(?m)^\s*version\s*=\s*'([^']+)'").Groups[1].Value
 if ($name -cne 'BAR PVE' -or $version -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?$') {
     throw 'modinfo.lua must name BAR PVE and contain a concrete release version.'
 }
-if (-not (Get-ChildItem -LiteralPath (Join-Path $source 'recoil-lua-library') -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1)) {
-    throw 'recoil-lua-library submodule is empty. Initialize and pin it before packaging.'
-}
+
 $uri = [Uri]$ReleaseBaseUrl
 if ($uri.Scheme -cne 'https' -or $uri.Host -cne 'github.com') {
     throw 'ReleaseBaseUrl must be an HTTPS GitHub Release download directory.'
@@ -31,7 +33,7 @@ $fileName = "BAR-PVE-$version.sdz"
 $archivePath = Join-Path $out $fileName
 $manifestPath = Join-Path $out 'manifest.json'
 if (Test-Path -LiteralPath $archivePath -PathType Leaf) { throw "Immutable release asset already exists: $archivePath" }
-$excluded = @('.git', '.github', '.vscode', '.codex', 'docs', 'doc', 'tools', 'spec', '.lux')
+$excluded = @('.git', '.github', '.vscode', '.codex', 'docs', 'doc', 'tools', 'spec', '.lux', 'recoil-lua-library')
 $files = @(Get-ChildItem -LiteralPath $source -Recurse -File -Force | Where-Object {
     $relative = $_.FullName.Substring($source.Length + 1)
     $first = ($relative -split '[\\/]')[0]
@@ -55,6 +57,10 @@ catch {
 finally { $zip.Dispose() }
 $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
 $size = (Get-Item -LiteralPath $archivePath).Length
+if ($size -ge 2GB) {
+    Remove-Item -LiteralPath $archivePath -Force
+    throw "GitHub Release assets must be smaller than 2 GiB: $size bytes"
+}
 $manifest = [ordered]@{
     schemaVersion = 1
     channel = 'pve'

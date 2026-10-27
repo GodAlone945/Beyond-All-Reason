@@ -1,4 +1,4 @@
-﻿return {
+return {
   name = 'BAR PVE',
   description = 'Independent BAR PVE game',
   shortName = 'BARPVE',
