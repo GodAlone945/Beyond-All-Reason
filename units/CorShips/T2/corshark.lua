@@ -117,7 +117,6 @@ return {
 				range = 400,
 				reloadtime = 2.2,
 				soundhit = "xplodep1",
-				soundhitvolume = 18,
 				soundstart = "torpedo1",
 				startvelocity = 150,
 				tolerance = 9000,
@@ -138,8 +137,6 @@ return {
 			[1] = {
 				badtargetcategory = "HOVER NOTSHIP",
 				def = "ARMSMART_TORPEDO",
-				maindir = "0 0 1",
-				maxangledif = 180,
 				onlytargetcategory = "NOTHOVER",
 			},
 		},

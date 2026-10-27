@@ -30,7 +30,7 @@ return {
 		footprintx = 2,
 		footprintz = 2,
 		hidedamage = true,
-    	holdsteady = true,
+		holdsteady = true,
 		icontype = "armcom",
 		sightemitheight = 40,
 		mass = 4900,
@@ -47,7 +47,7 @@ return {
 		radardistance = 1100,
 		radaremitheight = 40,
 		reclaimable = false,
-   		releaseheld  = true,
+		releaseheld = true,
 		script = "Units/ARMCOMHILVL.lua",
 		seismicsignature = 0,
 		selfdestructas = "commanderexplosion",
@@ -109,7 +109,7 @@ return {
 			"armdecom",
 		},
 		customparams = {
-			unitgroup = 'builder',
+			unitgroup = "builder",
 			area_mex_def = "armmex",
 			iscommander = true,
 			effigy_offset = 1,
@@ -120,6 +120,7 @@ return {
 			normaltex = "unittextures/Arm_normal.dds",
 			paralyzemultiplier = 0.025,
 			subfolder = "",
+			tombstone = "armstone",
 			evolution_health_transfer = "percentage",
 			evolution_target = "armcomlvl4",
 			evolution_condition = "timer",
@@ -133,9 +134,10 @@ return {
 			childreninheritxp = "TURRET MOBILEBUILT",
 			parentsinheritxp = "TURRET MOBILEBUILT",
 			effigy = "comeffigylvl2",
+			firestateoncloak = 0,
 			minimum_respawn_stun = 5,
 			distance_stun_multiplier = 1,
-			fall_damage_multiplier = 5,--this ensures commander dies when it hits the ground so effigies can trigger respawn.
+			fall_damage_multiplier = 5, --this ensures commander dies when it hits the ground so effigies can trigger respawn.
 		},
 		featuredefs = {
 			dead = {
@@ -259,6 +261,7 @@ return {
 					projectile_destruction_method = "descend",
 					stockpilelimit = 3,
 					weapons_group = 1,
+					soundstart_volume_multiplier = 0.7,
 				},
 				damage = {
 					default = 550,
@@ -288,9 +291,7 @@ return {
 				soundhitdry = "hackshot",
 				soundhitwet = "sizzle",
 				soundstart = "lasrcrw2",
-				soundstartvolume = 30,
 				soundhitdryvolume = 40,
-				soundhitwetvolume = 30,
 				soundtrigger = 1,
 				texture3 = "largebeam",
 				thickness = 1.5,
@@ -372,8 +373,6 @@ return {
 				soundhit = "xplomas2",
 				soundhitwet = "sizzlexs",
 				soundstart = "disigun1",
-				soundhitvolume = 36,
-				soundstartvolume = 96,
 				soundtrigger = true,
 				tolerance = 20000,
 				turret = true,
@@ -431,7 +430,7 @@ return {
 					},
 				},
 			},
-            shortgun = {
+			shortgun = {
 				accuracy = 50,
 				allowNonBlockingAim = true,
 				areaofeffect = 10,
@@ -476,7 +475,7 @@ return {
 			empflashbang = {
 				areaofeffect = 50,
 				avoidfeature = false,
-				beamdecay = .8,
+				beamdecay = 0.8,
 				--beamtime = 0.25,
 				beamttl = 0.8,
 				burnblow = true,
@@ -529,13 +528,13 @@ return {
 			[2] = {
 				badtargetcategory = "VTOL",
 				def = "ARMCOMSEALASER",
-				onlytargetcategory = "NOTAIR"
+				onlytargetcategory = "NOTAIR",
 			},
 			[3] = {
 				def = "DISINTEGRATOR",
 				onlytargetcategory = "NOTSUB",
 			},
-            [4] = {
+			[4] = {
 				badtargetcategory = "GROUNDSCOUT",
 				def = "LONGGUN",
 				onlytargetcategory = "EMPABLE",
@@ -543,7 +542,7 @@ return {
 			[5] = {
 				def = "SHORTGUN",
 				onlytargetcategory = "NOTSUB",
-                fastautoretargeting = true,
+				fastautoretargeting = true,
 			},
 			[6] = {
 				def = "empflashbang",

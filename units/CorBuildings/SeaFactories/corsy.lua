@@ -4,6 +4,7 @@ return {
 		buildpic = "CORSY.DDS",
 		buildtime = 5100,
 		canmove = true,
+		canReclaim = false,
 		collisionvolumeoffsets = "0 0 0",
 		collisionvolumescales = "96 59 96",
 		collisionvolumetype = "Box",
@@ -40,6 +41,7 @@ return {
 		customparams = {
 			model_author = "Mr Bob",
 			normaltex = "unittextures/cor_normal.dds",
+			quickstart_discountable = true,
 			subfolder = "CorBuildings/SeaFactories",
 			unitgroup = "builder",
 		},

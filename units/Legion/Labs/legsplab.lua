@@ -5,6 +5,7 @@ return {
 		buildpic = "legsplab.DDS",
 		buildtime = 11800,
 		canmove = true,
+		canReclaim = false,
 		category = "SURFACE UNDERWATER",
 		corpse = "DEAD",
 		energycost = 5500,
@@ -57,7 +58,7 @@ return {
 				footprintz = 7,
 				height = 20,
 				metal = 930,
-				object = "Units/legsplab_dead.s3o",
+				object = "Units/legsy_dead.s3o", -- placeholder, legsplab has no wreck model
 				reclaimable = true,
 			},
 		},

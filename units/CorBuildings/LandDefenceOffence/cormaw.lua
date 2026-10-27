@@ -25,7 +25,7 @@ return {
 		script = "Units/cormaw.cob",
 		seismicsignature = 0,
 		selfdestructas = "flamethrowerSelfd",
-		sightdistance = 422,
+		sightdistance = 440,
 		stealth = true,
 		turnrate = 0,
 		upright = true,
@@ -80,8 +80,7 @@ return {
 			},
 		},
 		sfxtypes = {
-			explosiongenerators = {
-			},
+			explosiongenerators = {},
 		},
 		sounds = {
 			canceldestruct = "cancel2",
@@ -132,10 +131,8 @@ return {
 				rgbcolor2 = "0.9 0.84 0.8",
 				sizegrowth = 0.75,
 				soundhitdry = "flamhit1",
-				soundhitvolume = 7.5,
 				soundhitwet = "sizzle",
 				soundstart = "Flamhvy1",
-				soundstartvolume = 5.3,
 				soundtrigger = false,
 				sprayangle = 100,
 				targetmoveerror = 0.001,

@@ -13,15 +13,18 @@ function widget:GetInfo()
 	}
 end
 
-
 -- Localized Spring API for performance
 local spGetGameFrame = Spring.GetGameFrame
 local spEcho = Spring.Echo
 
 local spGetUnitTeam = Spring.GetUnitTeam
 
-
-
+-- Lightning orb (fusion) noise: octaves per noise sample. 4 is the original look; 3 cuts the orb's GPU
+-- cost by about a quarter but smooths away the finest arcs, visible when zoomed in on a fusion.
+local orbNoiseOctaves = 4
+-- Blend a second projection in near the poles of a lightning orb to hide the UV singularity there. It
+-- doubles the noise work on roughly half of the sphere; false shows a pinch at its top and bottom.
+local orbPoleBlend = true
 
 --------------------------------------------------------------------------------
 -- Beherith's notes
@@ -32,7 +35,7 @@ local spGetUnitTeam = Spring.GetUnitTeam
 -- [ ] Optimize shader
 -- [ ] Combine Effects of techniques
 -- [x] LightningOrb() TOO EXPENSIVE!
-	-- do multiple wraps, like 4 instead of 18 goddamn passes!
+-- do multiple wraps, like 4 instead of 18 goddamn passes!
 -- [ ] Ensure SphereVBO indices to triangles are ordered bottom to top!
 -- [x] Draw order is incorrect, we are drawing after gadget's shield jitter
 
@@ -102,6 +105,14 @@ local corfusShieldSphere = table.merge(defaults, {
 	--colormap2 = { {0.2, 0.6, 0.2, 0.4},{0.2, 0.6, 0.2, 0.45},{0.2, 0.6, 0.2, 0.45},{0.2, 0.6, 0.2, 0.4} },
 })
 
+local corhltfusShieldSphere = table.merge(defaults, {
+	pos = { 0, 51, 0 },
+	size = 23,
+	light = 3.25,
+	--colormap1 = { {0.9, 0.9, 1, 0.75},{0.9, 0.9, 1, 1.0},{0.9, 0.9, 1, 1.0},{0.9, 0.9, 1, 0.75} },
+	--colormap2 = { {0.2, 0.6, 0.2, 0.4},{0.2, 0.6, 0.2, 0.45},{0.2, 0.6, 0.2, 0.45},{0.2, 0.6, 0.2, 0.4} },
+})
+
 local legfusShieldSphere = table.merge(defaults, {
 	pos = { 0, 10, 0 },
 	size = 23,
@@ -109,7 +120,6 @@ local legfusShieldSphere = table.merge(defaults, {
 	--colormap1 = { {0.9, 0.9, 1, 0.75},{0.9, 0.9, 1, 1.0},{0.9, 0.9, 1, 1.0},{0.9, 0.9, 1, 0.75} },
 	--colormap2 = { {0.2, 0.6, 0.2, 0.4},{0.2, 0.6, 0.2, 0.45},{0.2, 0.6, 0.2, 0.45},{0.2, 0.6, 0.2, 0.4} },
 })
-
 
 local corgateShieldSphere = table.merge(defaults, {
 	pos = { 0, 42, 0 },
@@ -180,134 +190,319 @@ local legdeflectorShieldSphere = table.merge(defaults, {
 })
 
 local UnitEffects = {
-	["armjuno"] = {
-		{ class = 'ShieldSphere', options = armjunoShieldSphere },
-		{ class = 'ShieldJitter', options = { life = math.huge, pos = { 0, 72, 0 }, size = 14, precision = 22, repeatEffect = true } },
+	armjuno = {
+		{ class = "ShieldSphere", options = armjunoShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = { life = math.huge, pos = { 0, 72, 0 }, size = 14, precision = 22, repeatEffect = true },
+		},
 	},
-	["legjuno"] = {
-		{ class = 'ShieldSphere', options = legjunoShieldSphere },
-		{ class = 'ShieldJitter', options = { life = math.huge, pos = { 0, 72, 0 }, size = 14, precision = 22, repeatEffect = true } },
+	legjuno = {
+		{ class = "ShieldSphere", options = legjunoShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = { life = math.huge, pos = { 0, 72, 0 }, size = 14, precision = 22, repeatEffect = true },
+		},
 	},
-	["corjuno"] = {
-		{ class = 'ShieldSphere', options = corjunoShieldSphere },
-		{ class = 'ShieldJitter', options = { life = math.huge, pos = { 0, 72, 0 }, size = 14, precision = 22, repeatEffect = true } },
+	corjuno = {
+		{ class = "ShieldSphere", options = corjunoShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = { life = math.huge, pos = { 0, 72, 0 }, size = 14, precision = 22, repeatEffect = true },
+		},
 	},
 
 	--// FUSIONS //--------------------------
-	["corafus"] = {
-		{ class = 'ShieldSphere', options = corafusShieldSphere },
-		{ class = 'ShieldJitter', options = { layer = -16, life = math.huge, pos = { 0, 60, 0 }, size = 32.5, precision = 22, repeatEffect = true } },
+	corafus = {
+		{ class = "ShieldSphere", options = corafusShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = {
+				layer = -16,
+				life = math.huge,
+				pos = { 0, 60, 0 },
+				size = 32.5,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
 	},
-	["corfus"] = {
-		{ class = 'ShieldSphere', options = corfusShieldSphere },
-		{ class = 'ShieldJitter', options = { life = math.huge, pos = { 0, 50, 0 }, size = 23.5, precision = 22, repeatEffect = true } },
+	corfus = {
+		{ class = "ShieldSphere", options = corfusShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = { life = math.huge, pos = { 0, 50, 0 }, size = 23.5, precision = 22, repeatEffect = true },
+		},
 	},
-	["legfus"] = {
-		{ class = 'ShieldSphere', options = legfusShieldSphere },
-		{ class = 'ShieldJitter', options = { life = math.huge, pos = { 0, 19, 0 }, size = 23.5, precision = 22, repeatEffect = true } },
+	corhltfus = {
+		{ class = "ShieldSphere", options = corhltfusShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = { life = math.huge, pos = { 0, 50, 0 }, size = 23.5, precision = 22, repeatEffect = true },
+		},
 	},
-	["armafus"] = {
-		{ class = 'ShieldSphere', options = armafusShieldSphere },
-		{ class = 'ShieldJitter', options = { layer = -16, life = math.huge, pos = { 0, 60, 0 }, size = 28.5, precision = 22, repeatEffect = true } },
+	legfus = {
+		{ class = "ShieldSphere", options = legfusShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = { life = math.huge, pos = { 0, 19, 0 }, size = 23.5, precision = 22, repeatEffect = true },
+		},
 	},
-	["legafus"] = {
-		{ class = 'ShieldSphere', options = legafusShieldSphere },
-		{ class = 'ShieldJitter', options = { layer = -16, life = math.huge, pos = { 0, 60, 0 }, size = 38.5, precision = 22, repeatEffect = true } },
+	armafus = {
+		{ class = "ShieldSphere", options = armafusShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = {
+				layer = -16,
+				life = math.huge,
+				pos = { 0, 60, 0 },
+				size = 28.5,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
 	},
-	["armafust3"] = {
-		{ class = 'ShieldSphere', options = armafust3ShieldSphere },
-		{ class = 'ShieldJitter', options = { layer = -16, life = math.huge, pos = { 0, 120, 0 }, size = 57, precision = 22, repeatEffect = true } },
+	legafus = {
+		{ class = "ShieldSphere", options = legafusShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = {
+				layer = -16,
+				life = math.huge,
+				pos = { 0, 60, 0 },
+				size = 38.5,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
 	},
-	["corafust3"] = {
-		{ class = 'ShieldSphere', options = corafust3ShieldSphere },
-		{ class = 'ShieldJitter', options = { layer = -16, life = math.huge, pos = { 0, 120, 0 }, size = 65, precision = 22, repeatEffect = true } },
+	armafust3 = {
+		{ class = "ShieldSphere", options = armafust3ShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = {
+				layer = -16,
+				life = math.huge,
+				pos = { 0, 120, 0 },
+				size = 57,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
 	},
-	["legafust3"] = {
-		{ class = 'ShieldSphere', options = legafust3ShieldSphere },
-		{ class = 'ShieldJitter', options = { layer = -16, life = math.huge, pos = { 0, 120, 0 }, size = 77, precision = 22, repeatEffect = true } },
+	corafust3 = {
+		{ class = "ShieldSphere", options = corafust3ShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = {
+				layer = -16,
+				life = math.huge,
+				pos = { 0, 120, 0 },
+				size = 65,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
 	},
-	["resourcecheat"] = {
-		{ class = 'ShieldSphere', options = armafusShieldSphere },
-		{ class = 'ShieldJitter', options = { layer = -16, life = math.huge, pos = { 0, 60, 0 }, size = 28.5, precision = 22, repeatEffect = true } },
+	legafust3 = {
+		{ class = "ShieldSphere", options = legafust3ShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = {
+				layer = -16,
+				life = math.huge,
+				pos = { 0, 120, 0 },
+				size = 77,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
 	},
-	["corgate"] = {
-		{ class = 'ShieldJitter', options = { delay = 0, life = math.huge, pos = { 0, 42, 0 }, size = 12, precision = 22, repeatEffect = true , isShiedl } },
-		{ class = 'ShieldSphere', options = corgateShieldSphere },
+	resourcecheat = {
+		{ class = "ShieldSphere", options = armafusShieldSphere },
+		{
+			class = "ShieldJitter",
+			options = {
+				layer = -16,
+				life = math.huge,
+				pos = { 0, 60, 0 },
+				size = 28.5,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
+	},
+	corgate = {
+		{
+			class = "ShieldJitter",
+			options = {
+				delay = 0,
+				life = math.huge,
+				pos = { 0, 42, 0 },
+				size = 12,
+				precision = 22,
+				repeatEffect = true,
+				isShield = true,
+			},
+		},
+		{ class = "ShieldSphere", options = corgateShieldSphere },
 		--{class='ShieldJitter', options={delay=0,life=math.huge, pos={0,42,0.0}, size=555, precision=0, strength= 0.001, repeatEffect=true}},
 		--{class='ShieldJitter',options={life=math.huge, pos={0,42,0}, size=20, precision=2, repeatEffect=true}},
 	},
-	["corgatet3"] = {
-		{ class = 'ShieldJitter', options = { delay = 0, life = math.huge, pos = { 0, 75, 0 }, size = 18, precision = 22, repeatEffect = true , isShiedl } },
-		{ class = 'ShieldSphere', options = corgatet3ShieldSphere },
+	corgatet3 = {
+		{
+			class = "ShieldJitter",
+			options = {
+				delay = 0,
+				life = math.huge,
+				pos = { 0, 75, 0 },
+				size = 18,
+				precision = 22,
+				repeatEffect = true,
+				isShield = true,
+			},
+		},
+		{ class = "ShieldSphere", options = corgatet3ShieldSphere },
 		--{class='ShieldJitter', options={delay=0,life=math.huge, pos={0,42,0.0}, size=555, precision=0, strength= 0.001, repeatEffect=true}},
 		--{class='ShieldJitter',options={life=math.huge, pos={0,42,0}, size=20, precision=2, repeatEffect=true}},
 	},
-	["corfgate"] = {
-		{ class = 'ShieldJitter', options = { delay = 0, life = math.huge, pos = { 0, 42, 0 }, size = 12, precision = 22, repeatEffect = true } },
-		{ class = 'ShieldSphere', options = corgateShieldSphere },
+	corfgate = {
+		{
+			class = "ShieldJitter",
+			options = {
+				delay = 0,
+				life = math.huge,
+				pos = { 0, 42, 0 },
+				size = 12,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
+		{ class = "ShieldSphere", options = corgateShieldSphere },
 		--{class='ShieldJitter', options={delay=0,life=math.huge, pos={0,42,0.0}, size=555, precision=0, strength= 0.001, repeatEffect=true}},
 		--{class='ShieldJitter',options={life=math.huge, pos={0,42,0}, size=20, precision=2, repeatEffect=true}},
 	},
-	["armgate"] = {
-		{ class = 'ShieldJitter', options = { delay = 0, life = math.huge, pos = { 0, 20, -5 }, size = 15, precision = 22, repeatEffect = true } },
-		{ class = 'ShieldSphere', options = armgateShieldSphere },
+	armgate = {
+		{
+			class = "ShieldJitter",
+			options = {
+				delay = 0,
+				life = math.huge,
+				pos = { 0, 20, -5 },
+				size = 15,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
+		{ class = "ShieldSphere", options = armgateShieldSphere },
 		--{class='ShieldJitter', options={delay=0,life=math.huge, pos={0,23.5,-5}, size=555, precision=0, strength=0.001, repeatEffect=true}},
 	},
-	["armgatet3"] = {
-		{ class = 'ShieldJitter', options = { delay = 0, life = math.huge, pos = { 0, 37, -5 }, size = 21, precision = 22, repeatEffect = true } },
-		{ class = 'ShieldSphere', options = armgatet3ShieldSphere },
+	armgatet3 = {
+		{
+			class = "ShieldJitter",
+			options = {
+				delay = 0,
+				life = math.huge,
+				pos = { 0, 37, -5 },
+				size = 21,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
+		{ class = "ShieldSphere", options = armgatet3ShieldSphere },
 		--{class='ShieldJitter', options={delay=0,life=math.huge, pos={0,23.5,-5}, size=555, precision=0, strength=0.001, repeatEffect=true}},
 	},
-	["leggatet3"] = {
-		{ class = 'ShieldJitter', options = { delay = 0, life = math.huge, pos = { 0, 45, 0 }, size = 20, precision = 22, repeatEffect = true } },
-		{ class = 'ShieldSphere', options = leggatet3ShieldSphere },
+	leggatet3 = {
+		{
+			class = "ShieldJitter",
+			options = {
+				delay = 0,
+				life = math.huge,
+				pos = { 0, 45, 0 },
+				size = 20,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
+		{ class = "ShieldSphere", options = leggatet3ShieldSphere },
 		--{class='ShieldJitter', options={delay=0,life=math.huge, pos={0,23.5,-5}, size=555, precision=0, strength=0.001, repeatEffect=true}},
 	},
-	["armfgate"] = {
-		{ class = 'ShieldJitter', options = { delay = 0, life = math.huge, pos = { 0, 25, 0 }, size = 15, precision = 22, repeatEffect = true } },
-		{ class = 'ShieldSphere', options = table.merge(armgateShieldSphere, { pos = { 0, 25, 0 } }) },
+	armfgate = {
+		{
+			class = "ShieldJitter",
+			options = {
+				delay = 0,
+				life = math.huge,
+				pos = { 0, 25, 0 },
+				size = 15,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
+		{ class = "ShieldSphere", options = table.merge(armgateShieldSphere, { pos = { 0, 25, 0 } }) },
 		--{class='ShieldJitter', options={delay=0,life=math.huge, pos={0,25,0}, size=555, precision=0, strength= 0.001, repeatEffect=true}},
 	},
-	["legdeflector"] = {
-		{ class = 'ShieldJitter', options = { delay = 0, life = math.huge, pos = { 0, 20, -5 }, size = 15, precision = 22, repeatEffect = true } },
-		{ class = 'ShieldSphere', options = legdeflectorShieldSphere },
+	legdeflector = {
+		{
+			class = "ShieldJitter",
+			options = {
+				delay = 0,
+				life = math.huge,
+				pos = { 0, 20, -5 },
+				size = 15,
+				precision = 22,
+				repeatEffect = true,
+			},
+		},
+		{ class = "ShieldSphere", options = legdeflectorShieldSphere },
 		--{class='ShieldJitter', options={delay=0,life=math.huge, pos={0,23.5,-5}, size=555, precision=0, strength=0.001, repeatEffect=true}},
 	},
-	["lootboxbronze"] = {
-		{ class = 'ShieldSphere', options = table.merge(corfusShieldSphere,  {pos = { 0, 34, 0 }, size = 10} ) },
-		{ class = 'ShieldJitter', options = { life = math.huge, pos = { 0, 34, 0 }, size = 10.5, precision = 22, repeatEffect = true } },
+	lootboxbronze = {
+		{ class = "ShieldSphere", options = table.merge(corfusShieldSphere, { pos = { 0, 34, 0 }, size = 10 }) },
+		{
+			class = "ShieldJitter",
+			options = { life = math.huge, pos = { 0, 34, 0 }, size = 10.5, precision = 22, repeatEffect = true },
+		},
 	},
-	["lootboxsilver"] = {
-		{ class = 'ShieldSphere', options = table.merge(corfusShieldSphere,  {pos = { 0, 52, 0 }, size = 15} ) },
-		{ class = 'ShieldJitter', options = { life = math.huge, pos = { 0, 52, 0 }, size = 15.5, precision = 22, repeatEffect = true } },
+	lootboxsilver = {
+		{ class = "ShieldSphere", options = table.merge(corfusShieldSphere, { pos = { 0, 52, 0 }, size = 15 }) },
+		{
+			class = "ShieldJitter",
+			options = { life = math.huge, pos = { 0, 52, 0 }, size = 15.5, precision = 22, repeatEffect = true },
+		},
 	},
-	["lootboxgold"] = {
-		{ class = 'ShieldSphere', options = table.merge(corfusShieldSphere,  {pos = { 0, 69, 0 }, size = 20} ) },
-		{ class = 'ShieldJitter', options = { life = math.huge, pos = { 0, 69, 0 }, size = 20.5, precision = 22, repeatEffect = true } },
+	lootboxgold = {
+		{ class = "ShieldSphere", options = table.merge(corfusShieldSphere, { pos = { 0, 69, 0 }, size = 20 }) },
+		{
+			class = "ShieldJitter",
+			options = { life = math.huge, pos = { 0, 69, 0 }, size = 20.5, precision = 22, repeatEffect = true },
+		},
 	},
-	["lootboxplatinum"] = {
-		{ class = 'ShieldSphere', options = table.merge(corfusShieldSphere,  {pos = { 0, 87, 0 }, size = 25} ) },
-		{ class = 'ShieldJitter', options = { life = math.huge, pos = { 0, 87, 0 }, size = 25.5, precision = 22, repeatEffect = true } },
+	lootboxplatinum = {
+		{ class = "ShieldSphere", options = table.merge(corfusShieldSphere, { pos = { 0, 87, 0 }, size = 25 }) },
+		{
+			class = "ShieldJitter",
+			options = { life = math.huge, pos = { 0, 87, 0 }, size = 25.5, precision = 22, repeatEffect = true },
+		},
 	},
-
 }
 
 local scavEffects = {}
-if UnitDefNames['armcom_scav'] then
+if UnitDefNames.armcom_scav then
 	for k, effect in pairs(UnitEffects) do
-		scavEffects[k .. '_scav'] = effect
-		if scavEffects[k .. '_scav'].options then
-			if scavEffects[k .. '_scav'].options.color then
-				scavEffects[k .. '_scav'].options.color = { 0.92, 0.32, 1.0 }
+		scavEffects[k .. "_scav"] = effect
+		if scavEffects[k .. "_scav"].options then
+			if scavEffects[k .. "_scav"].options.color then
+				scavEffects[k .. "_scav"].options.color = { 0.92, 0.32, 1.0 }
 			end
-			if scavEffects[k .. '_scav'].options.colormap then
-				scavEffects[k .. '_scav'].options.colormap = { { 0.92, 0.32, 1.0 } }
+			if scavEffects[k .. "_scav"].options.colormap then
+				scavEffects[k .. "_scav"].options.colormap = { { 0.92, 0.32, 1.0 } }
 			end
-			if scavEffects[k .. '_scav'].options.colormap1 then
-				scavEffects[k .. '_scav'].options.colormap1 = { { 0.92, 0.32, 1.0 } }
+			if scavEffects[k .. "_scav"].options.colormap1 then
+				scavEffects[k .. "_scav"].options.colormap1 = { { 0.92, 0.32, 1.0 } }
 			end
-			if scavEffects[k .. '_scav'].options.colormap2 then
-				scavEffects[k .. '_scav'].options.colormap2 = { { 0.92, 0.32, 1.0 } }
+			if scavEffects[k .. "_scav"].options.colormap2 then
+				scavEffects[k .. "_scav"].options.colormap2 = { { 0.92, 0.32, 1.0 } }
 			end
 		end
 	end
@@ -318,7 +513,6 @@ if UnitDefNames['armcom_scav'] then
 end
 
 local orbUnitDefs = {}
-
 
 for unitname, effect in pairs(UnitEffects) do
 	if UnitDefNames[unitname] then
@@ -332,14 +526,16 @@ for unitname, effect in pairs(UnitEffects) do
 
 				attr[5] = 1 -- margin
 				attr[6] = 0 -- precision
-				attr[7] = (opts.isShield and 1) or 0  -- isShield
+				attr[7] = (opts.isShield and 1) or 0 -- isShield
 				attr[8] = 1 -- technique
 
-				attr[ 9], attr[10], attr[11], attr[12] = unpack((opts.colormap1 and opts.colormap1[1]) or {-1,-1,-1,-1})
-				attr[13], attr[14], attr[15], attr[16] = unpack((opts.colormap2 and opts.colormap2[1]) or {-1,-1,-1,-1})
+				attr[9], attr[10], attr[11], attr[12] =
+					unpack((opts.colormap1 and opts.colormap1[1]) or { -1, -1, -1, -1 })
+				attr[13], attr[14], attr[15], attr[16] =
+					unpack((opts.colormap2 and opts.colormap2[1]) or { -1, -1, -1, -1 })
 
 				attr[17], attr[18], attr[19], attr[20] = 0, 0, 0, 0 -- padding for instData
-				orbUnitDefs[UnitDefNames[unitname].id] =  attr
+				orbUnitDefs[UnitDefNames[unitname].id] = attr
 			end
 		end
 	end
@@ -351,18 +547,18 @@ UnitEffects = nil
 -- Variables
 --------------------------------------------------------------------------------
 
+---@type InstanceVBOTable?
 local orbVBO = nil
 local orbShader = nil
 
 local LuaShader = gl.LuaShader
 local InstanceVBOTable = gl.InstanceVBOTable
 
-local popElementInstance  = InstanceVBOTable.popElementInstance
+local popElementInstance = InstanceVBOTable.popElementInstance
 local pushElementInstance = InstanceVBOTable.pushElementInstance
-local drawInstanceVBO     = InstanceVBOTable.drawInstanceVBO
+local drawInstanceVBO = InstanceVBOTable.drawInstanceVBO
 
-local vsSrc =
-[[
+local vsSrc = [[
 #version 420
 #extension GL_ARB_uniform_buffer_object : require
 #extension GL_ARB_shader_storage_buffer_object : require
@@ -503,12 +699,12 @@ void main()
 }
 ]]
 
-local fsSrc =
-[[
+local fsSrc = [[
 #version 420
 #extension GL_ARB_uniform_buffer_object : require
 #extension GL_ARB_shading_language_420pack: require
 #line 20000
+//__DEFINES__
 uniform sampler2D noiseMap;
 uniform sampler2D mask;
 
@@ -597,7 +793,7 @@ out vec4 fragColor;
 	}
 
 	float Fbm12(vec2 P) {
-		const int octaves = 4;
+		const int octaves = ORB_NOISE_OCTAVES;
 		const float lacunarity = 1.8;
 		const float gain = 0.80;
 
@@ -768,6 +964,7 @@ void main(void)
 
 		// Near the poles, blend in a second projection rotated 90° around X
 		// so its pole singularity is at the equator of the primary projection
+		#if ORB_POLE_BLEND
 		float poleFade = abs(nDir.y);
 		if (poleFade > 0.45) {
 			vec3 rotatedVec = vec3(noiseVec.x, -noiseVec.z, noiseVec.y);
@@ -776,6 +973,7 @@ void main(void)
 			float blendWeight = smoothstep(0.45, 0.85, poleFade);
 			col = mix(col, col2, blendWeight);
 		}
+		#endif
 
 		// Color variation - bright white on arc peaks, base color in gaps
 		float arcIntensity = clamp(length(col) / (length(baseColor) + 0.001), 0.0, 3.0) / 3.0;
@@ -839,47 +1037,46 @@ void main(void)
 ]]
 
 local function goodbye(reason)
-  spEcho("Orb GL4 widget exiting with reason: "..reason)
-  widgetHandler:RemoveWidget()
+	spEcho("Orb GL4 widget exiting with reason: " .. reason)
+	widgetHandler:RemoveWidget()
 end
 
 local function initGL4()
-
 	local engineUniformBufferDefs = LuaShader.GetEngineUniformBufferDefs()
 	vsSrc = vsSrc:gsub("//__ENGINEUNIFORMBUFFERDEFS__", engineUniformBufferDefs)
 	fsSrc = fsSrc:gsub("//__ENGINEUNIFORMBUFFERDEFS__", engineUniformBufferDefs)
-	orbShader =  LuaShader(
-    {
-      vertex = vsSrc,
-      fragment = fsSrc,
-      uniformInt = {
-        noiseMap = 0,
-        mask = 1,
-        },
-	uniformFloat = {
-		reflectionPass = 0.0,
-      },
-    },
-    "orbShader GL4"
-  )
-  shaderCompiled = orbShader:Initialize()
-  if not shaderCompiled then goodbye("Failed to compile orbShader GL4 ") end
-  local sphereVBO, numVerts, sphereIndexVBO, numIndices = InstanceVBOTable.makeSphereVBO(32,24,1)
-  --spEcho("SphereVBO has", numVerts, "vertices and ", numIndices,"indices")
-  local orbVBOLayout = {
-		  {id = 3, name = 'posrad', size = 4}, -- widthlength
-		  {id = 4, name = 'margin_teamID_shield_technique', size = 4}, --  emit dir
-		  {id = 5, name = 'color1', size = 4}, --- color
-		  {id = 6, name = 'color2', size = 4}, --- color
-		  {id = 7, name = 'instData', type = GL.UNSIGNED_INT, size= 4},
-		}
-  orbVBO = InstanceVBOTable.makeInstanceVBOTable(orbVBOLayout,256, "orbVBO", 7)
-  orbVBO.numVertices = numIndices
-  orbVBO.vertexVBO = sphereVBO
-  orbVBO.VAO = InstanceVBOTable.makeVAOandAttach(orbVBO.vertexVBO, orbVBO.instanceVBO)
-  orbVBO.primitiveType = GL.TRIANGLES
-  orbVBO.indexVBO = sphereIndexVBO
-  orbVBO.VAO:AttachIndexBuffer(orbVBO.indexVBO)
+	fsSrc = fsSrc:gsub("//__DEFINES__", string.format("#define ORB_NOISE_OCTAVES %d\n#define ORB_POLE_BLEND %d\n", math.max(1, math.floor(orbNoiseOctaves)), orbPoleBlend and 1 or 0))
+	orbShader = LuaShader({
+		vertex = vsSrc,
+		fragment = fsSrc,
+		uniformInt = {
+			noiseMap = 0,
+			mask = 1,
+		},
+		uniformFloat = {
+			reflectionPass = 0.0,
+		},
+	}, "orbShader GL4")
+	local shaderCompiled = orbShader:Initialize()
+	if not shaderCompiled then
+		goodbye("Failed to compile orbShader GL4 ")
+	end
+	local sphereVBO, numVerts, sphereIndexVBO, numIndices = InstanceVBOTable.makeSphereVBO(32, 24, 1)
+	--spEcho("SphereVBO has", numVerts, "vertices and ", numIndices,"indices")
+	local orbVBOLayout = {
+		{ id = 3, name = "posrad", size = 4 }, -- widthlength
+		{ id = 4, name = "margin_teamID_shield_technique", size = 4 }, --  emit dir
+		{ id = 5, name = "color1", size = 4 }, --- color
+		{ id = 6, name = "color2", size = 4 }, --- color
+		{ id = 7, name = "instData", type = GL.UNSIGNED_INT, size = 4 },
+	}
+	orbVBO = InstanceVBOTable.makeInstanceVBOTable(orbVBOLayout, 256, "orbVBO", 7)
+	orbVBO.numVertices = numIndices
+	orbVBO.vertexVBO = sphereVBO
+	orbVBO.VAO = InstanceVBOTable.makeVAOandAttach(orbVBO.vertexVBO, orbVBO.instanceVBO)
+	orbVBO.primitiveType = GL.TRIANGLES
+	orbVBO.indexVBO = sphereIndexVBO
+	orbVBO.VAO:AttachIndexBuffer(orbVBO.indexVBO)
 end
 
 --------------------------------------------------------------------------------
@@ -892,7 +1089,7 @@ local function DrawOrbs(reflectionPass)
 		--gl.Culling(GL.FRONT)
 		gl.Culling(false)
 		orbShader:Activate()
-		orbShader:SetUniform("reflectionPass", (reflectionPass and 1 ) or 0 )
+		orbShader:SetUniform("reflectionPass", (reflectionPass and 1) or 0)
 		drawInstanceVBO(orbVBO)
 		orbShader:Deactivate()
 	end
@@ -904,7 +1101,9 @@ end
 local shieldFinishFrames = {} -- unitID to gameframe
 
 function widget:DrawWorldPreParticles(drawAboveWater, drawBelowWater, drawReflection, drawRefraction)
-	if next(shieldFinishFrames) then shieldFinishFrames = {} end
+	if next(shieldFinishFrames) then
+		shieldFinishFrames = {}
+	end
 	-- NOTE: This is called TWICE per draw frame, once before water and once after, even if no water is present.
 	-- If water is present on the map, then it gets called again between the two for the refraction pass
 	-- Solution is to draw it only on the first call, and draw reflections from widget:DrawWorldReflection
@@ -924,8 +1123,8 @@ function widget:Initialize()
 		return
 	end
 	initGL4()
-	if WG['unittrackerapi'] and WG['unittrackerapi'].visibleUnits then
-		widget:VisibleUnitsChanged(WG['unittrackerapi'].visibleUnits, nil)
+	if WG.unittrackerapi and WG.unittrackerapi.visibleUnits then
+		widget:VisibleUnitsChanged(WG.unittrackerapi.visibleUnits, nil)
 	else
 		spEcho("Unit Tracker API unavailable, exiting Orb GL4")
 		widgetHandler:RemoveWidget()
@@ -933,15 +1132,15 @@ function widget:Initialize()
 	end
 end
 
-
 function widget:VisibleUnitAdded(unitID, unitDefID, unitTeam, noupload)
 	--spEcho("widget:VisibleUnitAdded",unitID, unitDefID, unitTeam, noupload,shieldFinishFrames[unitID])
 	if unitDefID and orbUnitDefs[unitDefID] then
-
 		unitTeam = unitTeam or spGetUnitTeam(unitID)
 
 		local _, _, _, _, buildProgress = Spring.GetUnitHealth(unitID)
-		if buildProgress < 1 then return end
+		if buildProgress < 1 then
+			return
+		end
 
 		local instanceCache = orbUnitDefs[unitDefID]
 		instanceCache[5] = shieldFinishFrames[unitID] or 0
@@ -949,7 +1148,8 @@ function widget:VisibleUnitAdded(unitID, unitDefID, unitTeam, noupload)
 		--instanceCache[7] = spGetGameFrame()
 		shieldFinishFrames[unitID] = nil
 
-		pushElementInstance(orbVBO,
+		pushElementInstance(
+			orbVBO,
 			instanceCache,
 			unitID, --key
 			true, -- updateExisting
@@ -969,13 +1169,18 @@ function widget:VisibleUnitsChanged(extVisibleUnits, extNumVisibleUnits)
 	InstanceVBOTable.uploadAllElements(orbVBO)
 end
 
-function widget:VisibleUnitRemoved(unitID)
-	shieldFinishFrames[unitID] = spGetGameFrame()
+function widget:VisibleUnitRemoved(unitID, unitDefID)
+	if orbUnitDefs[unitDefID] then -- the only units VisibleUnitAdded reads this for
+		shieldFinishFrames[unitID] = spGetGameFrame()
+	end
 	if orbVBO.instanceIDtoIndex[unitID] then
 		popElementInstance(orbVBO, unitID)
 	end
 end
 
 function widget:Shutdown()
-	-- FIXME: clean up after thyself!
+	if type(orbShader) == "table" then
+		orbShader:Finalize()
+		orbShader = nil
+	end
 end

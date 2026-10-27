@@ -34,10 +34,11 @@ return {
 		turninplacespeedlimit = 2.2044,
 		turnrate = 470,
 		customparams = {
-			unitgroup = 'aa',
+			unitgroup = "aa",
 			model_author = "EnderRobo",
 			normaltex = "unittextures/leg_normal.dds",
-			subfolder = "CorHovercraft",
+			reaimtime = 5,
+			subfolder = "Legion/Hovercraft",
 		},
 		featuredefs = {
 			dead = {
@@ -135,7 +136,6 @@ return {
 				soundhit = "bimpact3",
 				soundhitwet = "splshbig",
 				soundstart = "minigun3",
-				soundstartvolume = 3,
 				sprayangle = 900,
 				texture1 = "shot",
 				texture2 = "empty",
@@ -159,4 +159,3 @@ return {
 		},
 	},
 }
-

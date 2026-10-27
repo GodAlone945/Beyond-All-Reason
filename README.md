@@ -16,7 +16,7 @@ https://www.beyondallreason.info/guides
 
 Beyond All Reason (BAR), consists of 2 primary components, the lobby (Chobby - https://github.com/beyond-all-reason/BYAR-Chobby) and the game code itself (this repository).
 
-The game runs on top of the Recoil engine https://github.com/beyond-all-reason/spring.
+The game runs on top of the Recoil engine <https://github.com/beyond-all-reason/RecoilEngine>.
 
 In order to develop the game (this repository) you first need a working install of the lobby/launcher. There are 2 ways to do this:
 
@@ -26,21 +26,21 @@ In order to develop the game (this repository) you first need a working install 
 
 Once you have a working install of BAR you need a local development copy of the game code to work with. This code will live in the BAR install directory.
 
-1. To find the BAR install directory simply open the launcher (not full game) and click the "Open install directory" button. This is one of the 3 buttons (`Toggle log` and `Upload log` are the other 2). For Windows installs this might be your user's `AppData/Local/Programs/Beyond-All-Reason/data` directory.
+1. To find the BAR install directory simply open the launcher (not full game) and click the "Open install directory" button. This is one of the 3 buttons (`Toggle log` and `Upload log` are the other 2). For Windows installs this might be your user's `AppData/Local/Programs/Beyond-All-Reason/data` directory, for Linux it might be your user's `.local/state/Beyond All Reason/` directory.
 
-2. In the BAR install directory create the empty file `devmode.txt`. E.g: `AppData/Local/Programs/Beyond-All-Reason/data/devmode.txt`
+2. In the BAR install directory create the empty file `devmode.txt`. E.g: `AppData/Local/Programs/Beyond-All-Reason/data/devmode.txt` or `.local/state/Beyond All Reason/devmode.txt`.
 
-3. In the BAR install directory in the `data` folder in the `games` sub-directory (create `games` if it doesn't exist) clone the code for this repository into a directory with a name ending in `.sdd`. For example:
+3. In the BAR install directory (inside the `data` folder on Windows) in the `games` sub-directory (create `games` if it doesn't exist) clone the code for this repository into a directory with a name ending in `.sdd`. For example:
 
 ```
 git clone --recurse-submodules https://github.com/beyond-all-reason/Beyond-All-Reason.git BAR.sdd
 ```
 
-Ensure that you have the correct path by looking for the file `Beyond-All-Reason/data/games/BAR.sdd/modinfo.lua`
+Ensure that you have the correct path by looking for the file `Beyond-All-Reason/data/games/BAR.sdd/modinfo.lua` on Windows, or `.local/state/Beyond All Reason/games/BAR.sdd/modinfo.lua` on Linux.
 
 4. Now you have the game code launch the full game from the launcher as normal. Then go to `Settings > Developer > Singleplayer` and select `Beyond All Reason Dev`.
 
-5. Now you can launch a match normally through the game UI. This match will use the dev copy of the LUA code which is in `BAR-install-directory/data/games/BAR.sdd`.
+5. Now you can launch a match normally through the game UI. This match will use the development copy of the Lua code in the `BAR.sdd` directory you cloned in step 3.
 
 6. If developing Chobby also clone the code into the `games` directory. Follow the guide in the [Chobby README](https://github.com/beyond-all-reason/BYAR-Chobby#developing-the-lobby).
 
@@ -152,4 +152,3 @@ Then open **User Settings (JSON)** and add:
     }
 ],
 ```
-

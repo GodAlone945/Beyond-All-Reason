@@ -5,6 +5,7 @@ return {
 		buildpic = "ARMPLAT.DDS",
 		buildtime = 42000,
 		canmove = true,
+		canReclaim = false,
 		collisionvolumeoffsets = "0 4 0",
 		collisionvolumescales = "144 70 144",
 		collisionvolumetype = "Box",
@@ -66,7 +67,7 @@ return {
 				footprintz = 6,
 				height = 20,
 				metal = 1953,
-				object = "Units/armhaap_dead.s3o",
+				object = "Units/armaaplat_dead.s3o",
 				reclaimable = true,
 			},
 			heap = {

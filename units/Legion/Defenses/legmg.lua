@@ -33,11 +33,11 @@ return {
 			buildinggrounddecalsizey = 6,
 			buildinggrounddecalsizex = 6,
 			buildinggrounddecaldecayspeed = 30,
-			unitgroup = 'weaponaa',
+			unitgroup = "weaponaa",
 			model_author = "ZephyrSkies",
 			normaltex = "unittextures/leg_normal.dds",
 			removewait = true,
-			subfolder = "ArmBuildings/LandDefenceOffence",
+			subfolder = "Legion/Defenses",
 		},
 		featuredefs = {
 			dead = {
@@ -126,7 +126,6 @@ return {
 				soundhit = "bimpact3",
 				soundhitwet = "splshbig",
 				soundstart = "mgun6heavy",
-				soundstartvolume = 3.0,
 				soundtrigger = true,
 				sprayangle = 968,
 				texture1 = "shot",

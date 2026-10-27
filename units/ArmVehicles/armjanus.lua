@@ -118,10 +118,8 @@ return {
 				smoketrail = true,
 				smoketrailcastshadow = false,
 				soundhit = "xplosml2",
-				soundhitvolume = 8,
 				soundhitwet = "splsmed",
 				soundstart = "rocklit1",
-				soundstartvolume = 7,
 				startvelocity = 100,
 				texture1 = "null",
 				texture2 = "smoketrailbar",
@@ -135,6 +133,8 @@ return {
 				customparams = {
 					overrange_distance = 437,
 					projectile_destruction_method = "descend",
+					turretspeedx = 50,
+					turretspeedy = 80,
 				},
 				damage = {
 					default = 330,

@@ -26,6 +26,7 @@ return {
 		health = 3700,
 		hidedamage = true,
 		holdsteady = true,
+		mass = 2700, -- same as armcom's default mass (= metalcost)
 		maxacc = 0.18,
 		maxdec = 1.125,
 		maxslope = 20,
@@ -71,11 +72,14 @@ return {
 			[16] = "armfmkr",
 		},
 		customparams = {
+			canwearcosmetics = true,
 			decoyfor = "armcom",
+			firestateoncloak = 0,
 			isdecoycommander = true,
 			model_author = "FireStorm",
 			normaltex = "unittextures/Arm_normal.dds",
 			paralyzemultiplier = 0,
+			reaimtime = 5,
 			subfolder = "ArmBots/T2",
 			techlevel = 2,
 			unitgroup = "buildert2",

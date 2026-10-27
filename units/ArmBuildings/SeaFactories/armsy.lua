@@ -4,6 +4,7 @@ return {
 		buildpic = "ARMSY.DDS",
 		buildtime = 5160,
 		canmove = true,
+		canReclaim = false,
 		collisionvolumeoffsets = "0 16 0",
 		collisionvolumescales = "90 60 90",
 		collisionvolumetype = "Box",
@@ -40,6 +41,7 @@ return {
 		customparams = {
 			model_author = "FireStorm",
 			normaltex = "unittextures/Arm_normal.dds",
+			quickstart_discountable = true,
 			subfolder = "ArmBuildings/SeaFactories",
 			unitgroup = "builder",
 		},

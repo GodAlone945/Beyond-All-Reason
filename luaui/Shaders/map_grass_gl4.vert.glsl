@@ -79,7 +79,14 @@ void main() {
 
   vec4 worldPos = vec4(instancePosRotSize.x, 0.0, instancePosRotSize.z, 1.0);
   vec4 clipPos = cameraViewProj * vec4(worldPos.xyz, 1.0);
-  if (abs(clipPos.x / clipPos.w) > 1.1) {
+  float absW = abs(clipPos.w);
+  if (absW < 0.00001) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // Cull unstable near-plane results
+    return;
+  }
+
+  vec2 ndcXY = clipPos.xy / absW;
+  if (clipPos.z < -absW || clipPos.z > absW) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // Cull by moving out of clip space
     return;
   }
@@ -90,7 +97,8 @@ void main() {
     return;
   }
 
-  vec3 grassVertWorldPos = vertexPos * instancePosRotSize.w; // scale it
+  float bladeScale = instancePosRotSize.w; // grassBladeScale is baked into the patch mesh at load time
+  vec3 grassVertWorldPos = vertexPos * bladeScale; // scale it
   mat3 rotY = rotation3dY(instancePosRotSize.y); // poor mans random rotate
 
   grassVertWorldPos.xz = (rotY * grassVertWorldPos).xz + instancePosRotSize.xz; // rotate Y and move to world pos
@@ -101,7 +109,7 @@ void main() {
   //--- Heightmap sampling
   vec2 uvHM = vec2(clamp(grassVertWorldPos.x,8.0,mapSize.x-8.0),clamp(grassVertWorldPos.z,8.0, mapSize.y-8.0)) / mapSize.xy;
   float groundHeight = textureLod(heightmapTex, uvHM, 0.0).x;
-  grassVertWorldPos.y = (vertexPos.y + 0.5) * instancePosRotSize.w + groundHeight;
+  grassVertWorldPos.y = (vertexPos.y + 0.5) * bladeScale + groundHeight;
 
   //--- LOS tex
   vec4 losTexSample = texture(losTex, vec2(grassVertWorldPos.x / mapSize.z, grassVertWorldPos.z / mapSize.w)); // lostex is PO2
@@ -112,23 +120,32 @@ void main() {
   //--- SHADOWS ---
   float shadow = 1.0;
 
-  #ifdef HASSHADOWS
-    #define SHADOWOFFSET 4.0
+  #if HASSHADOWS == 1
     vec4 shadowVertexPos;
-    shadowVertexPos = shadowView * vec4(grassVertWorldPos+ vec3(SHADOWOFFSET, 0.0, SHADOWOFFSET),1.0);
-    shadowVertexPos.xy += vec2(0.5);
-    shadow += clamp(textureProj(shadowTex, shadowVertexPos), SHADOWFACTOR, 1.0);
-    shadowVertexPos = shadowView * vec4(grassVertWorldPos+ vec3(-SHADOWOFFSET, 0.0, -SHADOWOFFSET),1.0);
-    shadowVertexPos.xy += vec2(0.5);
-    shadow += clamp(textureProj(shadowTex, shadowVertexPos), SHADOWFACTOR, 1.0);
-    shadowVertexPos = shadowView * vec4(grassVertWorldPos+ vec3(-SHADOWOFFSET, 0.0, SHADOWOFFSET),1.0);
-    shadowVertexPos.xy += vec2(0.5);
-    shadow += clamp(textureProj(shadowTex, shadowVertexPos), SHADOWFACTOR, 1.0);
-    shadowVertexPos = shadowView * vec4(grassVertWorldPos+ vec3(SHADOWOFFSET, 0.0, -SHADOWOFFSET),1.0);
-    shadowVertexPos.xy += vec2(0.5);
-    shadow += clamp(textureProj(shadowTex, shadowVertexPos), SHADOWFACTOR, 1.0);
-    shadow = shadow*0.2;
+    #if SHADOWTAPS >= 4
+      // the original cross of four taps around the vertex, a cheap 4x blur of the shadow edge
+      #define SHADOWOFFSET 4.0
+      shadowVertexPos = shadowView * vec4(grassVertWorldPos+ vec3(SHADOWOFFSET, 0.0, SHADOWOFFSET),1.0);
+      shadowVertexPos.xy += vec2(0.5);
+      shadow += clamp(textureProj(shadowTex, shadowVertexPos), SHADOWFACTOR, 1.0);
+      shadowVertexPos = shadowView * vec4(grassVertWorldPos+ vec3(-SHADOWOFFSET, 0.0, -SHADOWOFFSET),1.0);
+      shadowVertexPos.xy += vec2(0.5);
+      shadow += clamp(textureProj(shadowTex, shadowVertexPos), SHADOWFACTOR, 1.0);
+      shadowVertexPos = shadowView * vec4(grassVertWorldPos+ vec3(-SHADOWOFFSET, 0.0, SHADOWOFFSET),1.0);
+      shadowVertexPos.xy += vec2(0.5);
+      shadow += clamp(textureProj(shadowTex, shadowVertexPos), SHADOWFACTOR, 1.0);
+      shadowVertexPos = shadowView * vec4(grassVertWorldPos+ vec3(SHADOWOFFSET, 0.0, -SHADOWOFFSET),1.0);
+      shadowVertexPos.xy += vec2(0.5);
+      shadow += clamp(textureProj(shadowTex, shadowVertexPos), SHADOWFACTOR, 1.0);
+      shadow = shadow*0.2;
+    #else
+      // one tap: the shadow sampler's hardware 2x2 compare filter already softens the edge
+      shadowVertexPos = shadowView * vec4(grassVertWorldPos, 1.0);
+      shadowVertexPos.xy += vec2(0.5);
+      shadow = clamp(textureProj(shadowTex, shadowVertexPos), SHADOWFACTOR, 1.0);
+    #endif
   #endif
+
 
   instanceParamsVS.y = clamp(shadow,SHADOWFACTOR,1.0);
 
@@ -150,7 +167,7 @@ void main() {
 
   instanceParamsVS.w = mix(vec3(0.0,1.0,0.0),vec3(0.0,shadeamount,0.0), texcoords0.y).y;
 
-  grassVertWorldPos = grassVertWorldPos.xyz +  grassNoise.rgb * vertexPos.y * instancePosRotSize.w * WINDSTRENGTH * grassuniforms.z; // wind is a factor of
+  grassVertWorldPos = grassVertWorldPos.xyz +  grassNoise.rgb * vertexPos.y * bladeScale * WINDSTRENGTH * grassuniforms.z; // wind is a factor of
 
 
   //--- UNIT BENDING ---
@@ -183,7 +200,7 @@ void main() {
       vec2 bendDir = totalBend / bendLen;
       // Convert to rotation angle (0 to ~80 degrees) to preserve blade length
       float bendAngle = clampedBend * UNITBENDSTRENGTH * 0.175;
-      float heightFromBase = max(0.0, vertexPos.y + 0.5) * instancePosRotSize.w;
+      float heightFromBase = max(0.0, vertexPos.y + 0.5) * bladeScale;
       // Rotate blade outward: sin for horizontal displacement, 1-cos for height reduction
       grassVertWorldPos.xz += bendDir * sin(bendAngle) * heightFromBase;
       grassVertWorldPos.y -= heightFromBase * (1.0 - cos(bendAngle));

@@ -119,7 +119,6 @@ return {
 				range = 400,
 				reloadtime = 1.5,
 				soundhit = "xplodep1",
-				soundhitvolume = 10,
 				soundstart = "torpedo1",
 				startvelocity = 130,
 				tolerance = 12000,
@@ -139,8 +138,6 @@ return {
 			[1] = {
 				badtargetcategory = "NOTSHIP",
 				def = "leg_torpedo_launcher",
-				maindir = "0 0 1",
-				maxangledif = 90,
 				onlytargetcategory = "NOTHOVER",
 			},
 		},

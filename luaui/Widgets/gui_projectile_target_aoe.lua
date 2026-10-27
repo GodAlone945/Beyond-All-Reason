@@ -9,7 +9,7 @@ function widget:GetInfo()
 		date = "January 2026",
 		license = "GNU GPL v2",
 		layer = 0,
-		enabled = true
+		enabled = true,
 	}
 end
 
@@ -17,7 +17,9 @@ end
 -- Localized functions
 --------------------------------------------------------------------------------
 local max = math.max
+local min = math.min
 local floor = math.floor
+local ceil = math.ceil
 local sqrt = math.sqrt
 local sin = math.sin
 local cos = math.cos
@@ -31,20 +33,36 @@ local spGetProjectilesInRectangle = Spring.GetProjectilesInRectangle
 local spGetProjectileDefID = Spring.GetProjectileDefID
 local spGetProjectileTarget = Spring.GetProjectileTarget
 local spGetProjectilePosition = Spring.GetProjectilePosition
+local spGetProjectileVelocity = Spring.GetProjectileVelocity
+local spGetProjectileTimeToLive = Spring.GetProjectileTimeToLive
+local spGetProjectileOwnerID = Spring.GetProjectileOwnerID
 local spGetGroundHeight = Spring.GetGroundHeight
-local spGetMyAllyTeamID = Spring.GetMyAllyTeamID
+local spGetGroundExtremes = Spring.GetGroundExtremes
+local spTraceRayGroundBetweenPositions = Spring.TraceRayGroundBetweenPositions
+local spGetMyAllyTeamID = Spring.GetLocalAllyTeamID
 local spGetProjectileTeamID = Spring.GetProjectileTeamID
 local spGetTeamInfo = Spring.GetTeamInfo
 local spGetUnitPosition = Spring.GetUnitPosition
+local spGetUnitVelocity = Spring.GetUnitVelocity
+local spGetUnitExperience = Spring.GetUnitExperience
 local spGetViewGeometry = Spring.GetViewGeometry
 local spIsGUIHidden = Spring.IsGUIHidden
 local spGetSpectatingState = Spring.GetSpectatingState
-local spGetMyTeamID = Spring.GetMyTeamID
+local spGetMyTeamID = Spring.GetLocalTeamID
 local spIsSphereInView = Spring.IsSphereInView
 local spGetCameraPosition = Spring.GetCameraPosition
 
+local Starburst = require("modules/starburst")
+local getStarburstWeapon = Starburst.getStarburstWeapon
+local stepStarburst = Starburst.stepStarburst
+
+local Verticalize = require("modules/verticalize")
+local getVerticalizeWeapon = Verticalize.getVerticalizeWeapon
+local getInFlightImpact = Verticalize.getInFlightImpact
+
 local mapSizeX = Game.mapSizeX
 local mapSizeZ = Game.mapSizeZ
+local gameSpeed = Game.gameSpeed
 
 local glBeginEnd = gl.BeginEnd
 local glCallList = gl.CallList
@@ -68,74 +86,83 @@ local GL_TRIANGLES = GL.TRIANGLES
 -- Configuration
 --------------------------------------------------------------------------------
 local Config = {
-	minAoeThreshold = 30,         -- Minimum AOE to show indicator
-	circleDivs = 32,              -- Circle segments
-	baseLineWidth = 1.3,          -- Base line width
-	updateInterval = 0.25,        -- Seconds between projectile updates (0 = every frame)
-	impactFadeDuration = 0.6,     -- Seconds to fade out after impact
+	minAoeThreshold = 30, -- Minimum AOE to show indicator
+	circleDivs = 32, -- Circle segments
+	baseLineWidth = 1.3, -- Base line width
+	updateInterval = 0.25, -- Seconds between projectile updates (0 = every frame)
+	impactFadeDuration = 0.66, -- Seconds to fade out after impact
+	impactFadeEndEarly = 1.2, -- Seconds to start fading out before impact
 
 	-- Colors (RGBA)
-	allyColor = { 1.0, 0.3, 0.2, 1.0 },           -- Red for allied (your missiles)
-	enemyColor = { 1.0, 0.3, 0.2, 1.0 },          -- Red for enemy (same, they shouldn't show for players)
-	paralyzerColor = { 0.2, 0.8, 1.0, 1.0 },      -- Cyan for paralyzer weapons
-	nukeAllyColor = { 1.0, 0.2, 0.0, 1.0 },       -- Orange for allied nukes
-	nukeEnemyColor = { 1.0, 0.0, 0.0, 1.0 },      -- Bright red for enemy nukes
-	junoAllyColor = { 0.2, 1.0, 0.2, 1.0 },       -- Green for allied juno missiles
-	junoEnemyColor = { 0.2, 1.0, 0.2, 1.0 },      -- Green for enemy juno missiles
+	allyColor = { 1.0, 0.3, 0.2, 1.0 }, -- Red for allied (your missiles)
+	enemyColor = { 1.0, 0.3, 0.2, 1.0 }, -- Red for enemy (same, they shouldn't show for players)
+	paralyzerColor = { 0.2, 0.8, 1.0, 1.0 }, -- Cyan for paralyzer weapons
+	nukeAllyColor = { 1.0, 0.2, 0.0, 1.0 }, -- Orange for allied nukes
+	nukeEnemyColor = { 1.0, 0.0, 0.0, 1.0 }, -- Bright red for enemy nukes
+	junoAllyColor = { 0.2, 1.0, 0.2, 1.0 }, -- Green for allied juno missiles
+	junoEnemyColor = { 0.2, 1.0, 0.2, 1.0 }, -- Green for enemy juno missiles
 
 	-- Animation
-	blinkSpeed = 0,               -- Blinks per second at max urgency
-	rotationSpeedMax = 100,        -- Degrees per second at start
-	rotationSpeedMin = 30,        -- Degrees per second at end
+	blinkSpeed = 0, -- Blinks per second at max urgency
+	rotationSpeedMax = 100, -- Degrees per second at start
+	rotationSpeedMin = 30, -- Degrees per second at end
 	pulseMinOpacity = 0.2,
 	pulseMaxOpacity = 0.4,
+	targetMarkerTickStartRadius = 0.95,
+	targetMarkerTickEndRadius = 0.34,
+	targetMarkerTickLength = 0.15,
+	targetMarkerTickCloseExponent = 0.7,
+	targetMarkerTickEarlyProgress = 0.4,
+	targetMarkerTickEarlyDuration = 0.35,
 
 	-- Camera distance fade for smaller (non-nuke) starburst indicators
 	smallAoeFadeStartDist = 3200, -- Distance at which indicators start fading
-	smallAoeFadeEndDist = 6400,   -- Distance at which indicators are fully invisible
+	smallAoeFadeEndDist = 6400, -- Distance at which indicators are fully invisible
 
 	-- Ring animation
-	ringCount = 4,                -- Number of concentric rings
-	ringPulseSpeed = 0.015,       -- Ring pulse animation speed
+	ringCount = 4, -- Number of concentric rings
+	ringPulseSpeed = 0.015, -- Ring pulse animation speed
 
 	-- Nuke sub-layer animation
-	nukeSubLayerMin = 12,         -- Minimum sub-layers per trefoil blade
-	nukeSubLayerMax = 64,         -- Maximum sub-layers per trefoil blade
-	nukeSubLayerAoeDivisor = 40,  -- AOE / this = number of sub-layers
-	nukeWaveSpeed = 1,            -- Wave cycles per second (outside to inside)
-	nukeWaveCount = 1.2,          -- Number of wave bands visible across the shape at once
-	nukeSubLayerGap = 0.25,       -- Gap between sub-layers as fraction of layer thickness
-	nukeBaseOpacity = 0.9,        -- Overall opacity multiplier for nuke trefoil indicator (0-1)
-	nukeGradientStrength = 0.75,  -- Gradient strength: 0 = uniform, 1 = outer fully bright / inner fully dim
+	nukeSubLayerMin = 12, -- Minimum sub-layers per trefoil blade
+	nukeSubLayerMax = 64, -- Maximum sub-layers per trefoil blade
+	nukeSubLayerAoeDivisor = 40, -- AOE / this = number of sub-layers
+	nukeWaveSpeed = 1, -- Wave cycles per second (outside to inside)
+	nukeWaveCount = 1.2, -- Number of wave bands visible across the shape at once
+	nukeSubLayerGap = 0.25, -- Gap between sub-layers as fraction of layer thickness
+	nukeBaseOpacity = 0.9, -- Overall opacity multiplier for nuke trefoil indicator (0-1)
+	nukeGradientStrength = 0.75, -- Gradient strength: 0 = uniform, 1 = outer fully bright / inner fully dim
 }
 
 --------------------------------------------------------------------------------
 -- State
 --------------------------------------------------------------------------------
-local trackedProjectiles = {}     -- Active projectiles we're tracking
-local trackedCount = 0            -- Number of tracked projectiles (avoids pairs iteration)
-local trackedNukeCount = 0        -- Number of tracked nuke projectiles (avoids iteration)
-local fadingImpacts = {}          -- Recently impacted targets that should fade out
-local fadingImpactCount = 0       -- Number of active fading impacts
-local starburstWeapons = {}       -- Cache of starburst weapon info
-local circleList = nil            -- Display list for circle
-local targetMarkerList = nil      -- Display list for target marker
+local trackedProjectiles = {} -- Active projectiles we're tracking
+local trackedCount = 0 -- Number of tracked projectiles (avoids pairs iteration)
+local trackedNukeCount = 0 -- Number of tracked nuke projectiles (avoids iteration)
+local fadingImpacts = {} -- Recently impacted targets that should fade out
+local fadingImpactCount = 0 -- Number of active fading impacts
+local starburstWeapons = {} -- Cache of starburst weapon info
+local circleList = nil -- Display list for circle
+local targetMarkerList = nil -- Display list for target marker
+local targetMarkerTickInnerRadius = 0
+local targetMarkerTickOuterRadius = 0
 local screenLineWidthScale = 1.0
 local myAllyTeamID = 0
 local myTeamID = 0
 local isSpectator = false
-local updateAccum = 0             -- Accumulator for update rate limiting
-local currentGeneration = 0       -- Generation counter for tracking (avoids temp table allocation)
+local updateAccum = 0 -- Accumulator for update rate limiting
+local currentGeneration = 0 -- Generation counter for tracking (avoids temp table allocation)
 
 --------------------------------------------------------------------------------
 -- Initialization - Build weapon cache
 --------------------------------------------------------------------------------
 local function BuildWeaponCache()
 	for wdid, wd in pairs(WeaponDefs) do
-		if wd.type == "StarburstLauncher" and wd.interceptor == 0 then
+		if wd.type == "StarburstLauncher" and wd.interceptor == 0 and not wd.tracks then
 			local aoe = wd.damageAreaOfEffect or 0
 			if aoe >= Config.minAoeThreshold then
-				local isNuke = wd.customParams and wd.customParams.nuclear
+				local isNuke = wd.customParams.nuclear ~= nil
 				local isParalyzer = wd.paralyzer or false
 				starburstWeapons[wdid] = {
 					aoe = aoe,
@@ -145,8 +172,20 @@ local function BuildWeaponCache()
 					name = wd.name,
 					range = wd.range,
 					projectileSpeed = wd.projectilespeed or 1,
+					uptime = wd.uptime or 0,
+					starburst = getStarburstWeapon(wd),
+					verticalize = getVerticalizeWeapon(wd),
+					waterWeapon = wd.waterWeapon,
+					leadLimit = wd.leadLimit or -1,
+					leadBonus = wd.leadBonus or 0,
+					initialTimeToLive = wd.flightTime or 0,
+					tracks = wd.tracks,
 				}
-				--Spring.Echo(wdid, wd.name, aoe, wd.range, isNuke, isParalyzer)
+				if starburstWeapons[wdid].initialTimeToLive == 0 then
+					local uptimeFrames = floor(starburstWeapons[wdid].uptime * gameSpeed)
+					starburstWeapons[wdid].initialTimeToLive =
+						floor(min(3000, uptimeFrames + wd.range / starburstWeapons[wdid].projectileSpeed + 100))
+				end
 			end
 		end
 	end
@@ -166,11 +205,9 @@ local function CreateDisplayLists()
 		end)
 	end)
 
-	-- Target marker (crosshair style with inner circle and ticks)
+	-- Target marker inner circle; the four ticks are animated separately.
 	targetMarkerList = glCreateList(function()
 		local innerRadius = 0.3
-		local outerRadius = 0.5
-		local tickLength = 0.15
 
 		-- Inner circle
 		glBeginEnd(GL_LINE_LOOP, function()
@@ -179,24 +216,16 @@ local function CreateDisplayLists()
 				glVertex(cos(theta) * innerRadius, 0, sin(theta) * innerRadius)
 			end
 		end)
-
-		-- Cross ticks pointing outward
-		for i = 0, 3 do
-			local angle = i * (pi / 2)
-			local cosA, sinA = cos(angle), sin(angle)
-			glBeginEnd(GL_LINES, function()
-				glVertex(cosA * outerRadius, 0, sinA * outerRadius)
-				glVertex(cosA * (outerRadius + tickLength), 0, sinA * (outerRadius + tickLength))
-			end)
-		end
 	end)
-
-
 end
 
 local function DeleteDisplayLists()
-	if circleList then glDeleteList(circleList) end
-	if targetMarkerList then glDeleteList(targetMarkerList) end
+	if circleList then
+		glDeleteList(circleList)
+	end
+	if targetMarkerList then
+		glDeleteList(targetMarkerList)
+	end
 end
 
 --------------------------------------------------------------------------------
@@ -204,8 +233,8 @@ end
 --------------------------------------------------------------------------------
 local BLADE_SEGMENTS = 16
 local BLADE_SEGMENTS_MINI = 8
-local bladeGeometry = {}       -- [blade][segment] = {cos, sin} for world
-local bladeGeometryMini = {}   -- [blade][segment] = {cos, sin} for minimap
+local bladeGeometry = {} -- [blade][segment] = {cos, sin} for world
+local bladeGeometryMini = {} -- [blade][segment] = {cos, sin} for minimap
 
 local function PrecomputeBladeGeometry()
 	local bladeAngle = rad(60)
@@ -239,7 +268,9 @@ end
 local function UpdateScreenScale()
 	local _, screenHeight = spGetViewGeometry()
 	screenLineWidthScale = 1.0 + (screenHeight - 1080) * (1.5 / 1080)
-	if screenLineWidthScale < 0.5 then screenLineWidthScale = 0.5 end
+	if screenLineWidthScale < 0.5 then
+		screenLineWidthScale = 0.5
+	end
 end
 
 --------------------------------------------------------------------------------
@@ -302,7 +333,7 @@ local function drawAllNukeGeometry()
 			local gradientMul = 1 - nukeGradientStrength * (1 - normalizedPos)
 			local layerAlpha = ca * baseOpacity * waveBrightness * gradientMul
 
-			if layerAlpha > 0.005 then  -- skip invisible layers
+			if layerAlpha > 0.005 then -- skip invisible layers
 				glColor(cr, cg, cb, layerAlpha)
 				local rI = radius * layerInner
 				local rO = radius * layerOuter
@@ -420,12 +451,27 @@ local function drawMinimapNukeTrefoils()
 	end
 end
 
-local function DrawTargetMarker(x, y, z, radius, rotation)
+local function DrawTargetMarkerTicks()
+	for i = 0, 3 do
+		local angle = i * (pi / 2)
+		local cosA, sinA = cos(angle), sin(angle)
+		glVertex(cosA * targetMarkerTickInnerRadius, 0, sinA * targetMarkerTickInnerRadius)
+		glVertex(cosA * targetMarkerTickOuterRadius, 0, sinA * targetMarkerTickOuterRadius)
+	end
+end
+
+local function DrawTargetMarker(x, y, z, radius, rotation, tickProgress)
+	local tickRadius = Config.targetMarkerTickStartRadius
+		+ (Config.targetMarkerTickEndRadius - Config.targetMarkerTickStartRadius) * tickProgress
+	targetMarkerTickInnerRadius = tickRadius
+	targetMarkerTickOuterRadius = tickRadius + Config.targetMarkerTickLength
+
 	glPushMatrix()
 	glTranslate(x, y, z)
 	glRotate(rotation, 0, 1, 0)
 	glScale(radius, radius, radius)
 	glCallList(targetMarkerList)
+	glBeginEnd(GL_LINES, DrawTargetMarkerTicks)
 	glPopMatrix()
 end
 
@@ -434,9 +480,21 @@ local function SetColor(color, alpha)
 end
 
 local function AddFadingImpact(data, currentTime, impactProgress)
+	if Config.impactFadeEndEarly > 0 then
+		return
+	end
+
 	local clampedProgress = impactProgress
-	if clampedProgress > 1 then clampedProgress = 1 elseif clampedProgress < 0 then clampedProgress = 0 end
+	if clampedProgress > 1 then
+		clampedProgress = 1
+	elseif clampedProgress < 0 then
+		clampedProgress = 0
+	end
 	local impactRingScale = 1 - clampedProgress * 0.5
+	local elapsed = currentTime - data.startTime
+	local avgSpeed = Config.rotationSpeedMax
+		- (Config.rotationSpeedMax - Config.rotationSpeedMin) * clampedProgress * 0.5
+	local rotation = -((elapsed * avgSpeed) % 360) * 0.5
 
 	fadingImpactCount = fadingImpactCount + 1
 	fadingImpacts[fadingImpactCount] = {
@@ -449,12 +507,14 @@ local function AddFadingImpact(data, currentTime, impactProgress)
 		initialFlightTime = data.initialFlightTime,
 		fadeStartTime = currentTime,
 		impactRingScale = impactRingScale,
+		rotation = rotation,
 	}
 end
 
 --------------------------------------------------------------------------------
 -- Projectile tracking
 --------------------------------------------------------------------------------
+
 local function GetProjectileTargetPos(proID)
 	local targetType, targetData = spGetProjectileTarget(proID)
 
@@ -463,29 +523,238 @@ local function GetProjectileTargetPos(proID)
 	end
 
 	-- Ground target
-	if targetType == 103 then  -- ASCII 'g'
+	if targetType == 103 then -- ASCII 'g'
 		if type(targetData) == "table" then
-			return targetData[1], targetData[2], targetData[3]
+			return targetData[1], targetData[2], targetData[3], true
 		end
 	-- Unit target
-	elseif targetType == 117 then  -- ASCII 'u'
-		local ux, uy, uz = spGetUnitPosition(targetData)
-		if ux then
-			return ux, uy, uz
+	elseif targetType == 117 then -- ASCII 'u'
+		local _, _, _, aimX, aimY, aimZ = spGetUnitPosition(targetData, false, true)
+		if aimX then
+			local velocityX, velocityY, velocityZ = spGetUnitVelocity(targetData)
+			return aimX, aimY, aimZ, true, velocityX or 0, velocityY or 0, velocityZ or 0, true
 		end
 	-- Feature target
-	elseif targetType == 102 then  -- ASCII 'f'
+	elseif targetType == 102 then -- ASCII 'f'
 		-- Could add feature position lookup if needed
 		return nil
 	-- Projectile target (interceptor)
-	elseif targetType == 112 then  -- ASCII 'p'
+	elseif targetType == 112 then -- ASCII 'p'
 		local px, py, pz = spGetProjectilePosition(targetData)
 		if px then
-			return px, py, pz
+			local velocityX, velocityY, velocityZ = spGetProjectileVelocity(targetData)
+			return px, py, pz, false, velocityX or 0, velocityY or 0, velocityZ or 0
 		end
 	end
 
 	return nil
+end
+
+-- Recoil does not expose the firing weapon's random predictSpeedMod, whose mean is 1.
+local function GetUntrackedUnitTargetPos(
+	proID,
+	weaponInfo,
+	launchElapsed,
+	px,
+	py,
+	pz,
+	tx,
+	ty,
+	tz,
+	velocityX,
+	velocityY,
+	velocityZ
+)
+	local ageFrames = launchElapsed * gameSpeed
+	tx = tx - velocityX * ageFrames
+	ty = ty - velocityY * ageFrames
+	tz = tz - velocityZ * ageFrames
+
+	local ownerID = spGetProjectileOwnerID(proID)
+	local sourceX, sourceY, sourceZ = px, py, pz
+	if ownerID then
+		local baseX, baseY, baseZ, aimX, aimY, aimZ = spGetUnitPosition(ownerID, false, true)
+		if aimX then
+			sourceX, sourceY, sourceZ = aimX, aimY, aimZ
+		elseif baseX then
+			sourceX, sourceY, sourceZ = baseX, baseY, baseZ
+		end
+	end
+
+	local dx, dy, dz = tx - sourceX, ty - sourceY, tz - sourceZ
+	local leadFrames = sqrt(dx * dx + dy * dy + dz * dz) / weaponInfo.projectileSpeed
+	local leadX, leadY, leadZ = velocityX * leadFrames, velocityY * leadFrames, velocityZ * leadFrames
+	local leadLength = sqrt(leadX * leadX + leadY * leadY + leadZ * leadZ)
+	if weaponInfo.leadLimit >= 0 and leadLength > 0 then
+		local ownerExperience = ownerID and spGetUnitExperience(ownerID) or 0
+		local maxLead = weaponInfo.leadLimit + weaponInfo.leadBonus * (ownerExperience or 0)
+		if leadLength > maxLead then
+			local leadScale = maxLead / leadLength
+			leadX, leadY, leadZ = leadX * leadScale, leadY * leadScale, leadZ * leadScale
+		end
+	end
+
+	tx = min(mapSizeX, max(0, tx + leadX))
+	ty = ty + leadY
+	tz = min(mapSizeZ, max(0, tz + leadZ))
+	local groundY = spGetGroundHeight(tx, tz)
+	if groundY and ty < groundY + 2 then
+		ty = groundY + 2
+	end
+	return tx, ty, tz
+end
+
+-- Mirrors CStarburstProjectile's ascent, turn-to-target, and tracking stages from its live state.
+local function GetPredictedImpactPos(
+	proID,
+	weaponInfo,
+	launchElapsed,
+	px,
+	py,
+	pz,
+	tx,
+	ty,
+	tz,
+	targetVelocityX,
+	targetVelocityY,
+	targetVelocityZ
+)
+	local vx, vy, vz = spGetProjectileVelocity(proID)
+	if not vx then
+		return tx, ty, tz, false
+	end
+
+	local velocityLength = sqrt(vx * vx + vy * vy + vz * vz)
+	if velocityLength <= 0 then
+		return tx, ty, tz, false
+	end
+
+	local simX, simY, simZ = px, py, pz
+	local dirX, dirY, dirZ = vx / velocityLength, vy / velocityLength, vz / velocityLength
+	targetVelocityX, targetVelocityY, targetVelocityZ = targetVelocityX or 0, targetVelocityY or 0, targetVelocityZ or 0
+	local targetMoves = weaponInfo.tracks and (targetVelocityX ~= 0 or targetVelocityY ~= 0 or targetVelocityZ ~= 0)
+
+	local ascentTimeRemaining = weaponInfo.uptime - launchElapsed
+	local ascentFrames = max(0, ceil(ascentTimeRemaining * gameSpeed) - 1)
+	local turnToTarget = true
+	if ascentFrames == 0 then
+		local targetDX, targetDY, targetDZ = tx - simX, ty - simY, tz - simZ
+		local targetLength = sqrt(targetDX * targetDX + targetDY * targetDY + targetDZ * targetDZ)
+		if targetLength > 0 then
+			turnToTarget = (dirX * targetDX + dirY * targetDY + dirZ * targetDZ) / targetLength <= 0.99
+		end
+	end
+
+	local starburstWeapon = weaponInfo.starburst
+	local speed = velocityLength
+	local _, _, _, groundMax = spGetGroundExtremes()
+
+	local remainingTimeToLive = spGetProjectileTimeToLive(proID)
+	local maxFrames = min(remainingTimeToLive or 512, 512)
+	if maxFrames < 1 then
+		maxFrames = 1
+	end
+
+	for frame = 1, maxFrames do
+		if targetMoves then
+			tx = min(mapSizeX, max(0, tx + targetVelocityX))
+			ty = ty + targetVelocityY
+			tz = min(mapSizeZ, max(0, tz + targetVelocityZ))
+		end
+
+		local targetDX, targetDY, targetDZ = tx - simX, ty - simY, tz - simZ
+		local targetLength = sqrt(targetDX * targetDX + targetDY * targetDY + targetDZ * targetDZ)
+		if targetLength <= 8 then
+			return tx, ty, tz, false
+		end
+
+		dirX, dirY, dirZ, speed, ascentFrames, turnToTarget = stepStarburst(
+			starburstWeapon,
+			dirX,
+			dirY,
+			dirZ,
+			speed,
+			ascentFrames,
+			turnToTarget,
+			targetDX / targetLength,
+			targetDY / targetLength,
+			targetDZ / targetLength
+		)
+
+		if not turnToTarget and not targetMoves then
+			local hitDistance, hitX, hitY, hitZ = spTraceRayGroundBetweenPositions(simX, simY, simZ, tx, ty, tz, false)
+			if hitDistance and hitDistance + 8 < targetLength then
+				return hitX, hitY, hitZ, true
+			end
+			return tx, ty, tz, false
+		end
+
+		local nextX, nextY, nextZ = simX + dirX * speed, simY + dirY * speed, simZ + dirZ * speed
+		local groundY = nextY < groundMax and spGetGroundHeight(nextX, nextZ)
+		if groundY and nextY < groundY then
+			local hitDistance, hitX, hitY, hitZ =
+				spTraceRayGroundBetweenPositions(simX, simY, simZ, nextX, nextY, nextZ, false)
+			if not hitX then
+				hitDistance = speed
+				hitX, hitY, hitZ = nextX, groundY, nextZ
+			end
+			if hitDistance + 8 < targetLength then
+				return hitX, hitY, hitZ, true
+			end
+		end
+		if not turnToTarget and targetLength <= speed + 8 then
+			return tx, ty, tz, false
+		end
+		simX, simY, simZ = nextX, nextY, nextZ
+	end
+
+	return tx, ty, tz, false
+end
+
+local function GetVerticalizeImpactPos(proID, weaponInfo, px, py, pz)
+	local targetType, targetData = spGetProjectileTarget(proID)
+	local aimX, aimY, aimZ
+	if targetType == 103 and type(targetData) == "table" then -- ASCII 'g'
+		aimX, aimY, aimZ = targetData[1], targetData[2], targetData[3]
+	elseif targetType == 117 then -- ASCII 'u'
+		local _
+		_, _, _, aimX, aimY, aimZ = spGetUnitPosition(targetData, false, true)
+	end
+	local vx, vy, vz, speed = spGetProjectileVelocity(proID)
+	if not aimX or not vx or speed <= 0 then
+		return nil
+	end
+
+	local remainingTimeToLive = spGetProjectileTimeToLive(proID)
+	local elapsedFrames = remainingTimeToLive and floor(max(0, weaponInfo.initialTimeToLive - remainingTimeToLive)) or 0
+
+	return getInFlightImpact(
+		weaponInfo.verticalize,
+		weaponInfo.starburst,
+		{ px, py, pz },
+		{ vx, vy, vz, speed },
+		elapsedFrames,
+		{ aimX, aimY, aimZ },
+		{ aimX, max(spGetGroundHeight(aimX, aimZ), 0), aimZ }
+	)
+end
+
+local function ProjectImpactToSurface(x, y, z, projectToGround, waterWeapon)
+	if projectToGround then
+		local groundY = spGetGroundHeight(x, z)
+		if groundY then
+			y = waterWeapon and groundY or max(groundY, 0)
+		end
+	end
+	return x, y, z
+end
+
+local function GetProjectileLaunchElapsed(proID, weaponInfo, fallbackElapsed)
+	local remainingTimeToLive = spGetProjectileTimeToLive(proID)
+	if remainingTimeToLive then
+		return max(0, weaponInfo.initialTimeToLive - remainingTimeToLive) / gameSpeed
+	end
+	return fallbackElapsed
 end
 
 local function UpdateTrackedProjectiles()
@@ -517,12 +786,81 @@ local function UpdateTrackedProjectiles()
 				if isSpectator or existingData.isOwnTeam then
 					existingData.generation = gen
 					newCount = newCount + 1
-					if existingData.weaponInfo.isNuke then newNukeCount = newNukeCount + 1 end
+					if existingData.weaponInfo.isNuke then
+						newNukeCount = newNukeCount + 1
+					end
 					local px, py, pz = spGetProjectilePosition(proID)
 					if px then
 						existingData.projectileX = px
 						existingData.projectileY = py
 						existingData.projectileZ = pz
+					end
+
+					if existingData.weaponInfo.tracks then
+						local tx, ty, tz, projectToGround, targetVelocityX, targetVelocityY, targetVelocityZ =
+							GetProjectileTargetPos(proID)
+						if tx then
+							existingData.impactX = tx
+							existingData.impactY = ty
+							existingData.impactZ = tz
+							existingData.projectToGround = projectToGround
+							existingData.targetVelocityX = targetVelocityX or 0
+							existingData.targetVelocityY = targetVelocityY or 0
+							existingData.targetVelocityZ = targetVelocityZ or 0
+						else
+							existingData.targetVelocityX = 0
+							existingData.targetVelocityY = 0
+							existingData.targetVelocityZ = 0
+						end
+					end
+
+					local launchElapsed =
+						GetProjectileLaunchElapsed(proID, existingData.weaponInfo, currentTime - existingData.startTime)
+					local tx, ty, tz = existingData.impactX, existingData.impactY, existingData.impactZ
+					if existingData.weaponInfo.verticalize then
+						if px and not existingData.isImpactFromLaunch then
+							local isFromLaunch
+							tx, ty, tz, isFromLaunch =
+								GetVerticalizeImpactPos(proID, existingData.weaponInfo, px, py, pz)
+							if tx then
+								tx, ty, tz = ProjectImpactToSurface(
+									tx,
+									ty,
+									tz,
+									existingData.projectToGround,
+									existingData.weaponInfo.waterWeapon
+								)
+								existingData.targetX = tx
+								existingData.targetY = ty
+								existingData.targetZ = tz
+								existingData.isImpactFromLaunch = isFromLaunch
+							end
+						end
+					elseif px and tx then
+						tx, ty, tz = GetPredictedImpactPos(
+							proID,
+							existingData.weaponInfo,
+							launchElapsed,
+							px,
+							py,
+							pz,
+							tx,
+							ty,
+							tz,
+							existingData.targetVelocityX,
+							existingData.targetVelocityY,
+							existingData.targetVelocityZ
+						)
+						tx, ty, tz = ProjectImpactToSurface(
+							tx,
+							ty,
+							tz,
+							existingData.projectToGround,
+							existingData.weaponInfo.waterWeapon
+						)
+						existingData.targetX = tx
+						existingData.targetY = ty
+						existingData.targetZ = tz
 					end
 				end
 			else
@@ -532,25 +870,79 @@ local function UpdateTrackedProjectiles()
 				local isAlly = (allyTeamID == myAllyTeamID)
 
 				if isSpectator or isOwnTeam then
-					local tx, ty, tz = GetProjectileTargetPos(proID)
+					local tx, ty, tz, projectToGround, targetVelocityX, targetVelocityY, targetVelocityZ, isUnitTarget =
+						GetProjectileTargetPos(proID)
 					local px, py, pz = spGetProjectilePosition(proID)
 
 					if tx and px then
+						local launchElapsed = GetProjectileLaunchElapsed(proID, weaponInfo, 0)
+						if isUnitTarget and not weaponInfo.tracks then
+							tx, ty, tz = GetUntrackedUnitTargetPos(
+								proID,
+								weaponInfo,
+								launchElapsed,
+								px,
+								py,
+								pz,
+								tx,
+								ty,
+								tz,
+								targetVelocityX,
+								targetVelocityY,
+								targetVelocityZ
+							)
+						end
+						local impactX, impactY, impactZ = tx, ty, tz
+						if not weaponInfo.tracks then
+							targetVelocityX, targetVelocityY, targetVelocityZ = 0, 0, 0
+						end
+						local isImpactFromLaunch
+						if weaponInfo.verticalize then
+							local verticalizeX, verticalizeY, verticalizeZ
+							verticalizeX, verticalizeY, verticalizeZ, isImpactFromLaunch =
+								GetVerticalizeImpactPos(proID, weaponInfo, px, py, pz)
+							if verticalizeX then
+								tx, ty, tz = verticalizeX, verticalizeY, verticalizeZ
+							end
+						else
+							tx, ty, tz = GetPredictedImpactPos(
+								proID,
+								weaponInfo,
+								launchElapsed,
+								px,
+								py,
+								pz,
+								tx,
+								ty,
+								tz,
+								targetVelocityX,
+								targetVelocityY,
+								targetVelocityZ
+							)
+						end
+						tx, ty, tz = ProjectImpactToSurface(tx, ty, tz, projectToGround, weaponInfo.waterWeapon)
+
 						local dx, dy, dz = tx - px, ty - py, tz - pz
 						local distance = sqrt(dx * dx + dy * dy + dz * dz)
 						local speed = max(weaponInfo.projectileSpeed * 30, 1)
 						local estimatedFlightTime = distance / speed
 
 						newCount = newCount + 1
-						if weaponInfo.isNuke then newNukeCount = newNukeCount + 1 end
-
-						-- Cache ground-adjusted target Y at creation (avoids per-frame API call)
-						local groundY = spGetGroundHeight(tx, tz)
-						if groundY and groundY > ty then ty = groundY end
+						if weaponInfo.isNuke then
+							newNukeCount = newNukeCount + 1
+						end
 
 						trackedProjectiles[proID] = {
 							generation = gen,
+							projectileID = proID,
 							weaponInfo = weaponInfo,
+							impactX = impactX,
+							impactY = impactY,
+							impactZ = impactZ,
+							projectToGround = projectToGround,
+							targetVelocityX = targetVelocityX or 0,
+							targetVelocityY = targetVelocityY or 0,
+							targetVelocityZ = targetVelocityZ or 0,
 							targetX = tx,
 							targetY = ty,
 							targetZ = tz,
@@ -558,10 +950,12 @@ local function UpdateTrackedProjectiles()
 							projectileY = py,
 							projectileZ = pz,
 							startTime = currentTime,
+							initialDistance = distance,
 							initialFlightTime = estimatedFlightTime,
 							isOwnTeam = isOwnTeam,
 							isAlly = isAlly,
 							speed = speed,
+							isImpactFromLaunch = isImpactFromLaunch,
 						}
 					end
 				end
@@ -592,7 +986,7 @@ end
 --------------------------------------------------------------------------------
 -- Draws non-nuke starburst indicators (nukes are batched separately in DrawWorld)
 local function DrawImpactIndicator(data, currentTime, camX, camY, camZ)
-	local tx, ty, tz = data.targetX, data.targetY, data.targetZ  -- targetY already ground-adjusted
+	local tx, ty, tz = data.targetX, data.targetY, data.targetZ -- targetY already ground-adjusted
 	local weaponInfo = data.weaponInfo
 	local aoe = weaponInfo.aoe
 
@@ -603,12 +997,17 @@ local function DrawImpactIndicator(data, currentTime, camX, camY, camZ)
 	if camDist >= Config.smallAoeFadeEndDist then
 		return
 	elseif camDist > Config.smallAoeFadeStartDist then
-		camFade = 1.0 - (camDist - Config.smallAoeFadeStartDist) / (Config.smallAoeFadeEndDist - Config.smallAoeFadeStartDist)
+		camFade = 1.0
+			- (camDist - Config.smallAoeFadeStartDist) / (Config.smallAoeFadeEndDist - Config.smallAoeFadeStartDist)
 	end
 
 	local elapsed = currentTime - data.startTime
 	local progress = elapsed / max(data.initialFlightTime, 0.1)
-	if progress > 1 then progress = 1 elseif progress < 0 then progress = 0 end
+	if progress > 1 then
+		progress = 1
+	elseif progress < 0 then
+		progress = 0
+	end
 
 	local color
 	if weaponInfo.isParalyzer then
@@ -634,6 +1033,39 @@ local function DrawImpactIndicator(data, currentTime, camX, camY, camZ)
 	end
 	opacity = opacity * camFade
 
+	local projectileX, projectileY, projectileZ = spGetProjectilePosition(data.projectileID)
+	if not projectileX then
+		if Config.impactFadeEndEarly > 0 then
+			return
+		end
+		projectileX, projectileY, projectileZ = data.projectileX, data.projectileY, data.projectileZ
+	end
+	local remainingDX = tx - projectileX
+	local remainingDY = ty - projectileY
+	local remainingDZ = tz - projectileZ
+	local remainingDistance = sqrt(remainingDX * remainingDX + remainingDY * remainingDY + remainingDZ * remainingDZ)
+	if Config.impactFadeEndEarly > 0 and remainingDistance <= 8 then
+		return
+	end
+
+	local flightFade = 1
+	if Config.impactFadeEndEarly > 0 and remainingDistance > 0 then
+		local closingSpeed = data.speed
+		local velocityX, velocityY, velocityZ = spGetProjectileVelocity(data.projectileID)
+		if velocityX then
+			local liveClosingSpeed = (remainingDX * velocityX + remainingDY * velocityY + remainingDZ * velocityZ)
+				* gameSpeed
+				/ remainingDistance
+			if liveClosingSpeed > 0 then
+				closingSpeed = liveClosingSpeed
+			end
+		end
+		if closingSpeed > 0 then
+			flightFade = min(1, remainingDistance / (closingSpeed * Config.impactFadeEndEarly))
+		end
+	end
+	opacity = opacity * flightFade
+
 	local avgSpeed = Config.rotationSpeedMax - (Config.rotationSpeedMax - Config.rotationSpeedMin) * progress * 0.5
 	local rotation = (elapsed * avgSpeed) % 360
 
@@ -652,9 +1084,21 @@ local function DrawImpactIndicator(data, currentTime, camX, camY, camZ)
 
 	-- Center target marker (rotating)
 	local markerSize = aoe * 0.4
-	local markerOpacity = (0.6 + 0.3 * blinkPhase) * camFade
+	local markerOpacity = (0.6 + 0.3 * blinkPhase) * camFade * flightFade
+	local distanceProgress = 1 - remainingDistance / max(data.initialDistance, 1)
+	if distanceProgress > 1 then
+		distanceProgress = 1
+	elseif distanceProgress < 0 then
+		distanceProgress = 0
+	end
+	distanceProgress = distanceProgress ^ Config.targetMarkerTickCloseExponent
+	local earlyProgress = min(1, progress / Config.targetMarkerTickEarlyDuration)
+	local tickProgress = sqrt(earlyProgress) * Config.targetMarkerTickEarlyProgress
+	if distanceProgress > tickProgress then
+		tickProgress = distanceProgress
+	end
 	SetColor(color, markerOpacity)
-	DrawTargetMarker(tx, ty + 3, tz, markerSize, -rotation * 0.5)
+	DrawTargetMarker(tx, ty + 3, tz, markerSize, -rotation * 0.5, tickProgress)
 end
 
 local function DrawFadingImpactIndicator(data, currentTime, camX, camY, camZ)
@@ -672,7 +1116,8 @@ local function DrawFadingImpactIndicator(data, currentTime, camX, camY, camZ)
 	if camDist >= Config.smallAoeFadeEndDist then
 		return true
 	elseif camDist > Config.smallAoeFadeStartDist then
-		camFade = 1.0 - (camDist - Config.smallAoeFadeStartDist) / (Config.smallAoeFadeEndDist - Config.smallAoeFadeStartDist)
+		camFade = 1.0
+			- (camDist - Config.smallAoeFadeStartDist) / (Config.smallAoeFadeEndDist - Config.smallAoeFadeStartDist)
 	end
 
 	local color
@@ -701,7 +1146,8 @@ local function DrawFadingImpactIndicator(data, currentTime, camX, camY, camZ)
 
 	local markerSize = aoe * 0.4
 	SetColor(color, fadeMul * 0.5)
-	DrawTargetMarker(tx, ty + 3, tz, markerSize, 0)
+	local rotation = data.rotation - (currentTime - data.fadeStartTime) * Config.rotationSpeedMin * 0.5
+	DrawTargetMarker(tx, ty + 3, tz, markerSize, rotation, 1)
 
 	return true
 end
@@ -749,7 +1195,9 @@ function widget:Update(dt)
 end
 
 function widget:DrawWorld()
-	if spIsGUIHidden() or (trackedCount == 0 and fadingImpactCount == 0) then return end
+	if spIsGUIHidden() or (trackedCount == 0 and fadingImpactCount == 0) then
+		return
+	end
 
 	glDepthTest(false)
 	glLineWidth(Config.baseLineWidth * screenLineWidthScale)
@@ -765,7 +1213,11 @@ function widget:DrawWorld()
 				-- Collect nuke into batch for single-draw-call rendering
 				local elapsed = currentTime - data.startTime
 				local progress = elapsed / max(data.initialFlightTime, 0.1)
-				if progress > 1 then progress = 1 elseif progress < 0 then progress = 0 end
+				if progress > 1 then
+					progress = 1
+				elseif progress < 0 then
+					progress = 0
+				end
 
 				local blinkPhase = 0
 				if Config.blinkSpeed > 0 then
@@ -773,14 +1225,18 @@ function widget:DrawWorld()
 					blinkPhase = sin(currentTime * blinkFreq * tau)
 				end
 
-				local avgSpeed = Config.rotationSpeedMax - (Config.rotationSpeedMax - Config.rotationSpeedMin) * progress * 0.5
+				local avgSpeed = Config.rotationSpeedMax
+					- (Config.rotationSpeedMax - Config.rotationSpeedMin) * progress * 0.5
 				local rotRad = ((elapsed * avgSpeed) % 360) * pi / 180
 
 				local color = data.isAlly and Config.nukeAllyColor or Config.nukeEnemyColor
 
 				nukeBatchSize = nukeBatchSize + 1
 				local nd = nukeBatch[nukeBatchSize]
-				if not nd then nd = {}; nukeBatch[nukeBatchSize] = nd end
+				if not nd then
+					nd = {}
+					nukeBatch[nukeBatchSize] = nd
+				end
 				nd.tx = data.targetX
 				nd.ty = data.targetY + 3
 				nd.tz = data.targetZ
@@ -836,11 +1292,12 @@ function widget:DrawWorld()
 end
 
 function widget:DrawInMiniMap(sx, sy)
-	if trackedNukeCount == 0 then return end
+	if trackedNukeCount == 0 then
+		return
+	end
 
 	local currentTime = osClock()
 	local worldToPixelX = sx / mapSizeX
-	local worldToPixelY = sy / mapSizeZ
 	local waveBase = currentTime * Config.nukeWaveSpeed
 
 	-- Collect all nuke data into minimap batch (reuses tables)
@@ -849,7 +1306,11 @@ function widget:DrawInMiniMap(sx, sy)
 		if data.weaponInfo.isNuke then
 			local elapsed = currentTime - data.startTime
 			local progress = elapsed / max(data.initialFlightTime, 0.1)
-			if progress > 1 then progress = 1 elseif progress < 0 then progress = 0 end
+			if progress > 1 then
+				progress = 1
+			elseif progress < 0 then
+				progress = 0
+			end
 
 			local blinkPhase = 0
 			if Config.blinkSpeed > 0 then
@@ -857,7 +1318,8 @@ function widget:DrawInMiniMap(sx, sy)
 				blinkPhase = sin(currentTime * blinkFreq * tau)
 			end
 
-			local avgSpeed = Config.rotationSpeedMax - (Config.rotationSpeedMax - Config.rotationSpeedMin) * progress * 0.5
+			local avgSpeed = Config.rotationSpeedMax
+				- (Config.rotationSpeedMax - Config.rotationSpeedMin) * progress * 0.5
 			local rotRad = ((elapsed * avgSpeed) % 360) * pi / 180
 
 			local color = data.isAlly and Config.nukeAllyColor or Config.nukeEnemyColor
@@ -865,11 +1327,18 @@ function widget:DrawInMiniMap(sx, sy)
 
 			local trefoilWorldSize = aoe * 0.75 * (0.6 + 0.08 * sin(currentTime * tau * 0.4))
 			local trefoilPixelSize = trefoilWorldSize * worldToPixelX
-			if trefoilPixelSize < 5 then trefoilPixelSize = 5 elseif trefoilPixelSize > 40 then trefoilPixelSize = 40 end
+			if trefoilPixelSize < 5 then
+				trefoilPixelSize = 5
+			elseif trefoilPixelSize > 40 then
+				trefoilPixelSize = 40
+			end
 
 			minimapNukeBatchSize = minimapNukeBatchSize + 1
 			local nd = minimapNukeBatch[minimapNukeBatchSize]
-			if not nd then nd = {}; minimapNukeBatch[minimapNukeBatchSize] = nd end
+			if not nd then
+				nd = {}
+				minimapNukeBatch[minimapNukeBatchSize] = nd
+			end
 			nd.targPX = data.targetX * worldToPixelX
 			nd.targPY = (1 - data.targetZ / mapSizeZ) * sy
 			nd.projPX = data.projectileX * worldToPixelX
@@ -887,7 +1356,9 @@ function widget:DrawInMiniMap(sx, sy)
 		end
 	end
 
-	if minimapNukeBatchSize == 0 then return end
+	if minimapNukeBatchSize == 0 then
+		return
+	end
 
 	-- Batch all lines in ONE draw call
 	glLineWidth(1.5)

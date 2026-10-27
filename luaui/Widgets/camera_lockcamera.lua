@@ -14,18 +14,35 @@ function widget:GetInfo()
 end
 
 local lockcameraHideEnemies = true -- specfullview
-local lockcameraLos = true         -- togglelos
+local lockcameraLos = true -- togglelos
 
-local transitionTime = 1.3         -- how long it takes the camera to move when tracking a player
-local listTime = 14                -- how long back to look for recent broadcasters
+local transitionTime = 1.3 -- how long it takes the camera to move when tracking a player
+local listTime = 14 -- how long back to look for recent broadcasters
 
-local totalTime = 0
+-- advanced only while Update runs, which sleeps once no broadcast is recent: a paused clock cannot
+-- bring an old broadcast back into the recent list
+local totalTime = 0.0
+local sec = 0.0
 local lastBroadcasts = {}
 local recentBroadcasters = {}
-local newBroadcaster = false
+local hasRecentBroadcasts = false
+local updateActive = true
+local playerStateDirty = true
 
-local desiredLosmodeChanged = 0
-local desiredLosmode, myLastCameraState
+local desiredLosmodeChanged = 0.0
+---@type 'los'|'normal'|nil
+local desiredLosmode
+local myLastCameraState
+---@type integer?
+local lockPlayerID
+---@type integer?
+local scheduledSpecFullView
+---@type integer?
+local myPlayerID
+---@type boolean?
+local mySpecStatus
+---@type boolean?
+local fullView
 
 local spGetCameraState = Spring.GetCameraState
 local spSetCameraState = Spring.SetCameraState
@@ -33,15 +50,38 @@ local spGetPlayerInfo = Spring.GetPlayerInfo
 local spSendCommands = Spring.SendCommands
 local spGetSpectatingState = Spring.GetSpectatingState
 local spGetMapDrawMode = Spring.GetMapDrawMode
-local spGetMyPlayerID = Spring.GetMyPlayerID
-local spGetLocalAllyTeamID = Spring.GetLocalAllyTeamID
-local spGetLocalTeamID = Spring.GetLocalTeamID
-local spGetTeamInfo = Spring.GetTeamInfo
+local spGetMyPlayerID = Spring.GetLocalPlayerID
 local spGetGameFrame = Spring.GetGameFrame
 
 local os_clock = os.clock
 local math_pi = math.pi
 local TWO_PI = 2 * math_pi
+
+local function WakeUpdate()
+	if not updateActive then
+		updateActive = true
+		sec = 1 -- refresh recentBroadcasters on the first frame back
+		widgetHandler:UpdateCallIn("Update")
+	end
+end
+
+local function SetDesiredLosmode(mode)
+	desiredLosmode = mode
+	desiredLosmodeChanged = os_clock()
+	WakeUpdate()
+end
+
+local function RefreshLocalPlayerState()
+	myPlayerID = spGetMyPlayerID()
+	mySpecStatus, fullView = spGetSpectatingState()
+	playerStateDirty = false
+end
+
+local function RefreshLocalPlayerStateIfDirty()
+	if playerStateDirty then
+		RefreshLocalPlayerState()
+	end
+end
 
 local function matchRotationRange(current_rotation, target_rotation)
 	local difference = current_rotation - target_rotation
@@ -56,11 +96,15 @@ local function matchRotation(targetState)
 
 	if not myRotation then
 		myRotation = 0
-		if myState.flipped == 0 then myRotation = math_pi end
+		if myState.flipped == 0 then
+			myRotation = math_pi
+		end
 	end
 	if not targetRotation then
 		targetRotation = 0
-		if targetState.flipped == 0 then targetRotation = math_pi end
+		if targetState.flipped == 0 then
+			targetRotation = math_pi
+		end
 	end
 
 	myState.ry = matchRotationRange(myRotation, targetRotation)
@@ -70,23 +114,24 @@ local function matchRotation(targetState)
 	myLastCameraState = myLastCameraState or myState
 end
 
-
 local function UpdateRecentBroadcasters()
-	for k in pairs(recentBroadcasters) do
-		recentBroadcasters[k] = nil
-	end
+	-- players whose broadcast stopped are removed from both tables in CameraBroadcastEvent
+	local anyRecent = false
 	for playerID, info in pairs(lastBroadcasts) do
-		local prevTime = info[1]
-		if totalTime - prevTime <= listTime or playerID == lockPlayerID then
-			if totalTime - prevTime <= listTime then
-				recentBroadcasters[playerID] = totalTime - prevTime
-			end
+		local age = totalTime - info[1]
+		if age <= listTime then
+			recentBroadcasters[playerID] = age
+			anyRecent = true
+		else
+			recentBroadcasters[playerID] = nil
 		end
 	end
-	WG.lockcamera.recentBroadcasters = recentBroadcasters
+	hasRecentBroadcasts = anyRecent
 end
 
 local function LockCamera(playerID)
+	RefreshLocalPlayerState()
+
 	local isSpec, teamID
 	if playerID then
 		_, _, isSpec, teamID = spGetPlayerInfo(playerID, false)
@@ -94,28 +139,19 @@ local function LockCamera(playerID)
 	if playerID and playerID ~= myPlayerID and playerID ~= lockPlayerID and teamID then
 		if lockcameraHideEnemies and not isSpec then
 			spSendCommands("specteam " .. teamID)
-			if not fullView then
-				scheduledSpecFullView = 1 -- this is needed else the minimap/world doesnt update properly
-				spSendCommands("specfullview")
-			else
-				scheduledSpecFullView = 2 -- this is needed else the minimap/world doesnt update properly
-				spSendCommands("specfullview")
-			end
-			if not isSpec and lockcameraLos and mySpecStatus then
-				desiredLosmode = 'los'
-				desiredLosmodeChanged = os_clock()
-			end
+			-- this is needed else the minimap/world doesn't update properly
+			scheduledSpecFullView = fullView and 2 or 1
+			spSendCommands("specfullview")
+			WakeUpdate()
 		elseif lockcameraHideEnemies and isSpec then
 			if not fullView then
 				spSendCommands("specfullview")
 			end
-			desiredLosmode = 'normal'
-			desiredLosmodeChanged = os_clock()
+			SetDesiredLosmode("normal")
 		end
 		lockPlayerID = playerID
 		if not isSpec and lockcameraLos and mySpecStatus then
-			desiredLosmode = 'los'
-			desiredLosmodeChanged = os_clock()
+			SetDesiredLosmode("los")
 		end
 		myLastCameraState = myLastCameraState or spGetCameraState()
 		local info = lastBroadcasts[lockPlayerID]
@@ -131,32 +167,22 @@ local function LockCamera(playerID)
 			myLastCameraState = nil
 		end
 		-- restore fullview if needed
-		if lockcameraHideEnemies and lockPlayerID and not isSpec then
-			if not fullView then
-				spSendCommands("specfullview")
-			end
-			if lockcameraLos and mySpecStatus then
-				desiredLosmode = 'normal'
-				desiredLosmodeChanged = os_clock()
-			end
+		if lockcameraHideEnemies and lockPlayerID and not isSpec and not fullView then
+			spSendCommands("specfullview")
 		end
 		lockPlayerID = nil
-		desiredLosmode = 'normal'
-		desiredLosmodeChanged = os_clock()
+		SetDesiredLosmode("normal")
 	end
 	UpdateRecentBroadcasters()
 
 	return lockPlayerID
 end
 
-
-function CameraBroadcastEvent(playerID, cameraState)
+function widget:CameraBroadcastEvent(playerID, cameraState)
 	-- if cameraState is empty then transmission has stopped
 	if not cameraState then
-		if lastBroadcasts[playerID] then
-			lastBroadcasts[playerID] = nil
-			newBroadcaster = true
-		end
+		lastBroadcasts[playerID] = nil
+		recentBroadcasters[playerID] = nil
 		if lockPlayerID == playerID then
 			LockCamera()
 		end
@@ -169,17 +195,15 @@ function CameraBroadcastEvent(playerID, cameraState)
 		entry[2] = cameraState
 	else
 		lastBroadcasts[playerID] = { totalTime, cameraState }
-		if not newBroadcaster then
-			newBroadcaster = true
-		end
 	end
+	hasRecentBroadcasts = true
+	WakeUpdate()
 
 	if playerID == lockPlayerID then
 		spSetCameraState(cameraState, transitionTime)
 	end
 end
 
-local sec = 0
 function widget:Update(dt)
 	sec = sec + dt
 	if sec > 1 then
@@ -192,8 +216,12 @@ function widget:Update(dt)
 	if desiredLosmode then
 		local now = os_clock()
 		if desiredLosmodeChanged + 0.9 > now then
-			if (desiredLosmode == "los" and spGetMapDrawMode() == "normal") or (desiredLosmode == "normal" and spGetMapDrawMode() == "los") then
-				-- this is needed else the minimap/world doesnt update properly
+			local mapDrawMode = spGetMapDrawMode()
+			if
+				(desiredLosmode == "los" and mapDrawMode == "normal")
+				or (desiredLosmode == "normal" and mapDrawMode == "los")
+			then
+				-- this is needed else the minimap/world doesn't update properly
 				spSendCommands("togglelos")
 			end
 		elseif desiredLosmodeChanged + 2 < now then
@@ -202,12 +230,17 @@ function widget:Update(dt)
 	end
 
 	if scheduledSpecFullView ~= nil then
-		-- this is needed else the minimap/world doesnt update properly
+		-- this is needed else the minimap/world doesn't update properly
 		spSendCommands("specfullview")
 		scheduledSpecFullView = scheduledSpecFullView - 1
 		if scheduledSpecFullView == 0 then
 			scheduledSpecFullView = nil
 		end
+	end
+
+	if not (hasRecentBroadcasts or desiredLosmode or scheduledSpecFullView) then
+		updateActive = false
+		widgetHandler:RemoveCallIn("Update")
 	end
 end
 
@@ -215,11 +248,7 @@ function widget:PlayerChanged(playerID)
 	if lockPlayerID and playerID == myPlayerID and desiredLosmode then
 		desiredLosmodeChanged = os_clock()
 	end
-	myPlayerID = spGetMyPlayerID()
-	myAllyTeamID = spGetLocalAllyTeamID()
-	myTeamID = spGetLocalTeamID()
-	myTeamPlayerID = select(2, spGetTeamInfo(myTeamID))
-	mySpecStatus, fullView = spGetSpectatingState()
+	playerStateDirty = true
 end
 
 function widget:Initialize()
@@ -235,13 +264,13 @@ function widget:Initialize()
 	end
 	WG.lockcamera.SetHideEnemies = function(value)
 		lockcameraHideEnemies = value
-		if lockPlayerID and not select(3, spGetPlayerInfo(lockPlayerID)) then
+		RefreshLocalPlayerStateIfDirty()
+		if lockPlayerID and not select(3, spGetPlayerInfo(lockPlayerID, false)) then
 			if not lockcameraHideEnemies then
 				if not fullView then
 					spSendCommands("specfullview")
 					if lockcameraLos and mySpecStatus then
-						desiredLosmode = 'normal'
-						desiredLosmodeChanged = os_clock()
+						SetDesiredLosmode("normal")
 						spSendCommands("togglelos")
 					end
 				end
@@ -249,8 +278,7 @@ function widget:Initialize()
 				if fullView then
 					spSendCommands("specfullview")
 					if lockcameraLos and mySpecStatus then
-						desiredLosmode = 'los'
-						desiredLosmodeChanged = os_clock()
+						SetDesiredLosmode("los")
 					end
 				end
 			end
@@ -267,39 +295,36 @@ function widget:Initialize()
 	end
 	WG.lockcamera.SetLos = function(value)
 		lockcameraLos = value
-		if lockcameraHideEnemies and mySpecStatus and lockPlayerID and not select(3, spGetPlayerInfo(lockPlayerID)) then
+		RefreshLocalPlayerStateIfDirty()
+		if
+			lockcameraHideEnemies
+			and mySpecStatus
+			and lockPlayerID
+			and not select(3, spGetPlayerInfo(lockPlayerID, false))
+		then
 			if lockcameraLos and mySpecStatus then
-				desiredLosmode = 'los'
-				desiredLosmodeChanged = os_clock()
+				SetDesiredLosmode("los")
 				spSendCommands("togglelos")
 			elseif not lockcameraLos and spGetMapDrawMode() == "los" then
-				desiredLosmode = 'normal'
-				desiredLosmodeChanged = os_clock()
+				SetDesiredLosmode("normal")
 				spSendCommands("togglelos")
 			end
 		end
 	end
-	WG.lockcamera.SetLosMode = function(value)
-		desiredLosmode = value
-		desiredLosmodeChanged = os_clock()
-	end
+	WG.lockcamera.SetLosMode = SetDesiredLosmode
 	WG.lockcamera.GetPlayerCameraState = function(playerID)
-		if lastBroadcasts[playerID] then
-			return lastBroadcasts[playerID][2]
-		end
-		return nil
+		local info = lastBroadcasts[playerID]
+		return info and info[2]
 	end
-
-	widgetHandler:RegisterGlobal('CameraBroadcastEvent', CameraBroadcastEvent)
+	WG.lockcamera.recentBroadcasters = recentBroadcasters
 
 	UpdateRecentBroadcasters()
 
-	widget:PlayerChanged(spGetMyPlayerID())
+	RefreshLocalPlayerState()
 end
 
 function widget:Shutdown()
 	WG.lockcamera = nil
-	widgetHandler:DeregisterGlobal('CameraBroadcastEvent')
 end
 
 function widget:GameOver()
@@ -332,22 +357,21 @@ function widget:SetConfigData(data)
 
 	if spGetGameFrame() > 0 then
 		if data.lockPlayerID ~= nil then
+			RefreshLocalPlayerStateIfDirty()
 			lockPlayerID = data.lockPlayerID
-			if lockPlayerID and not select(3, spGetPlayerInfo(lockPlayerID), false) then
+			if lockPlayerID and not select(3, spGetPlayerInfo(lockPlayerID, false)) then
 				if not lockcameraHideEnemies then
 					if not fullView then
 						spSendCommands("specfullview")
 						if lockcameraLos and mySpecStatus and spGetMapDrawMode() == "los" then
-							desiredLosmode = 'normal'
-							desiredLosmodeChanged = os_clock()
+							SetDesiredLosmode("normal")
 						end
 					end
 				else
 					if fullView then
 						spSendCommands("specfullview")
 						if lockcameraLos and mySpecStatus then
-							desiredLosmode = 'los'
-							desiredLosmodeChanged = os_clock()
+							SetDesiredLosmode("los")
 						end
 					end
 				end

@@ -31,6 +31,7 @@ return {
 		maxslope = 20,
 		maxwaterdepth = 35,
 		metalcost = 750,
+		mass = 2700, -- same as corcom's default mass (= metalcost)
 		mincloakdistance = 50,
 		movementclass = "COMMANDERBOT",
 		nochasecategory = "VTOL",
@@ -71,11 +72,14 @@ return {
 			[16] = "corfmkr",
 		},
 		customparams = {
+			canwearcosmetics = true,
 			decoyfor = "corcom",
+			firestateoncloak = 0,
 			isdecoycommander = true,
 			model_author = "Beherith",
 			normaltex = "unittextures/cor_normal.dds",
 			paralyzemultiplier = 0,
+			reaimtime = 5,
 			subfolder = "CorBots/T2",
 			techlevel = 2,
 			unitgroup = "buildert2",

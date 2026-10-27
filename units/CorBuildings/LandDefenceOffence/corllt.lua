@@ -25,7 +25,7 @@ return {
 		script = "Units/CORLLT.cob",
 		seismicsignature = 0,
 		selfdestructas = "mediumBuildingExplosionGenericSelfd",
-		sightdistance = 494,
+		sightdistance = 500,
 		yardmap = "oooo",
 		customparams = {
 			buildinggrounddecaldecayspeed = 30,
@@ -123,9 +123,6 @@ return {
 				turret = true,
 				weapontype = "BeamLaser",
 				weaponvelocity = 2250,
-				customparams = {
-					exclude_preaim = true,
-				},
 				damage = {
 					commanders = 112.5,
 					default = 75,
@@ -136,6 +133,7 @@ return {
 		},
 		weapons = {
 			[1] = {
+				badtargetcategory = "VTOL",
 				def = "COR_LIGHTLASER",
 				fastautoretargeting = true,
 				onlytargetcategory = "NOTSUB",

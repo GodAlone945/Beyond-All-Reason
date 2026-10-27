@@ -40,6 +40,7 @@ return {
 			model_author = "FireStorm",
 			normaltex = "unittextures/cor_normal.dds",
 			paralyzemultiplier = 0,
+			reaimtime = 1,
 			subfolder = "CorGantry",
 			techlevel = 3,
 			unitgroup = "weapon",
@@ -167,6 +168,9 @@ return {
 					default = 5500,
 					vtol = 2750,
 				},
+				customparams = {
+					sound_volume_multiplier = 2.5,
+				},
 			},
 			corkorg_rocket = {
 				areaofeffect = 200,
@@ -175,7 +179,7 @@ return {
 				cegtag = "missiletrailmedium-starburst",
 				craterboost = 0,
 				cratermult = 0,
-				edgeeffectiveness = 0.85,
+				edgeeffectiveness = 0.5,
 				explosiongenerator = "custom:genericshellexplosion-large-bomb",
 				firestarter = 70,
 				impulsefactor = 1,
@@ -201,17 +205,16 @@ return {
 				texture3 = "null",
 				tolerance = 9000,
 				tracks = true,
-				turnrate = 15000,
-				weaponacceleration = 230,
-				weapontimer = 1,
+				turnrate = 16000,
+				weaponacceleration = 250,
+				weapontimer = 0.9,
 				weapontype = "StarburstLauncher",
-				weaponvelocity = 2600,
+				weaponvelocity = 510,
 				customparams = {
 					overrange_distance = 1093,
-					projectile_destruction_method = "descend",
 				},
 				damage = {
-					default = 800,
+					default = 1000,
 				},
 			},
 			krogfootstep = {
@@ -233,7 +236,6 @@ return {
 				soundhitdry = "korgstep",
 				soundhitdryvolume = 18,
 				soundhitwet = "splssml",
-				soundhitwetvolume = 16,
 				weapontype = "Cannon",
 				customparams = {
 					bogus = 1,

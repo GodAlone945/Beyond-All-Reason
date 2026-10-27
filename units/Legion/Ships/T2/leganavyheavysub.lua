@@ -36,7 +36,7 @@ return {
 		customparams = {
 			model_author = "Model by Tharsis, Concept by Chris/Airnac",
 			normaltex = "unittextures/leg_normal.dds",
-			subfolder = "legion/Navy/T2",
+			subfolder = "Legion/Ships/T2",
 			techlevel = 2,
 			unitgroup = "sub",
 		},
@@ -119,7 +119,6 @@ return {
 				range = 850,
 				reloadtime = 8,
 				soundhit = "xplodep1",
-				soundhitvolume = 22,
 				soundstart = "torpedo1",
 				startvelocity = 150,
 				tolerance = 8000,
