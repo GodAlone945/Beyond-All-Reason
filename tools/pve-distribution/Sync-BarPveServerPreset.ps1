@@ -136,6 +136,27 @@ if ($PublishStatus) {
     if ([string]::IsNullOrWhiteSpace($GitRepository)) {
         $GitRepository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
     }
+    $serverStatePath = Join-Path $root 'state\server.json'
+    if (-not (Test-Path -LiteralPath $serverStatePath -PathType Leaf)) {
+        throw 'SPADS is not running; refusing to publish online status.'
+    }
+    $serverState = Get-Content -LiteralPath $serverStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $spadsProcess = Get-Process -Id ([int]$serverState.Pid) -ErrorAction SilentlyContinue
+    $expectedPerl = Join-Path $root 'perl-portable\perl\bin\perl.exe'
+    if (-not $spadsProcess -or $spadsProcess.Path -ine $expectedPerl -or
+        $spadsProcess.StartTime.ToUniversalTime().Ticks -ne [int64]$serverState.StartTicksUtc) {
+        throw 'SPADS process state is stale; refusing to publish online status.'
+    }
+    $spadsLog = Join-Path $root 'spads\var\log\spads.log'
+    if (-not (Test-Path -LiteralPath $spadsLog -PathType Leaf)) { throw 'SPADS hosting log is missing.' }
+    $hostingLines = [regex]::Matches((Get-Content -LiteralPath $spadsLog -Raw -Encoding UTF8),
+        '(?m)^(?<stamp>[0-9]{14}) - .*?Hosting game "(?<game>[^"]+)" using engine version "(?<engine>[^"]+)"')
+    $started = $spadsProcess.StartTime.ToString('yyyyMMddHHmmss')
+    $hosted = @($hostingLines | Where-Object { $_.Groups['stamp'].Value -ge $started } | Select-Object -Last 1)
+    if ($hosted.Count -eq 0 -or $hosted[0].Groups['game'].Value -cne $entry.gameName -or
+        $hosted[0].Groups['engine'].Value -cne $entry.engineVersion) {
+        throw 'SPADS is not hosting the active PVE version and engine; refusing to publish online status.'
+    }
     $GitRepository = (Resolve-Path -LiteralPath $GitRepository).Path
     $GitRepository = [IO.Path]::GetFullPath($GitRepository).TrimEnd('\')
     $repoRootOutput = (& git -C $GitRepository rev-parse --show-toplevel 2>&1 | Out-String).Trim()
