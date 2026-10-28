@@ -1,0 +1,9 @@
+{
+    "schemaVersion":  1,
+    "channel":  "pve",
+    "version":  "0.1.0-dev.2",
+    "gameName":  "BAR PVE 0.1.0-dev.2",
+    "sha256":  "f2418eed14ab55ddf067dd7da4027a71ba486cfafb8491ed22c4f959aa04c580",
+    "engineVersion":  "2026.07.04",
+    "manifestUrl":  "https://github.com/GodAlone945/Beyond-All-Reason/releases/download/pve-v0.1.0-dev.2/manifest.json"
+}
