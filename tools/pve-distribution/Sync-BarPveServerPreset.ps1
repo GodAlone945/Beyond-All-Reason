@@ -2,11 +2,14 @@
 param(
     [Parameter(Mandatory = $true)][string]$ServerRoot,
     [switch]$CheckOnly,
-    [switch]$ActivateDefault
+    [switch]$ActivateDefault,
+    [switch]$PublishStatus,
+    [string]$GitRepository
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ($CheckOnly -and $ActivateDefault) { throw 'CheckOnly and ActivateDefault cannot be combined.' }
+if ($CheckOnly -and $PublishStatus) { throw 'CheckOnly and PublishStatus cannot be combined.' }
 
 $root = [IO.Path]::GetFullPath($ServerRoot).TrimEnd('\')
 $store = Join-Path $root 'pve-data'
@@ -60,7 +63,18 @@ if ($CheckOnly) {
     Write-Output "Verified: $($entry.gameName) SHA-256 $hash"
     exit 0
 }
-if (@(Get-Process -Name perl, spring, spring-headless -ErrorAction SilentlyContinue).Count -gt 0) {
+if ($PublishStatus -and ($current -cne $entry.gameName -or $ActivateDefault)) {
+    throw 'Stop SPADS and synchronize its PVE preset before publishing server status.'
+}
+if ($PublishStatus) {
+    $defaultSectionForPublish = [regex]::Match($spadsText, '(?ms)^\[default\]\r?\n.*?(?=^\[|\z)')
+    if (-not $defaultSectionForPublish.Success -or
+        $defaultSectionForPublish.Groups[0].Value -notmatch '(?m)^hostingPreset:pve\s*$') {
+        throw 'The SPADS default hosting preset is not pve; refusing to publish online status.'
+    }
+}
+$serverProcesses = @(Get-Process -Name perl, spring, spring-headless, spring-dedicated -ErrorAction SilentlyContinue)
+if ($serverProcesses.Count -gt 0 -and -not $PublishStatus) {
     throw 'Server or game process is running; stop it before changing the PVE preset.'
 }
 if ($current -cne $entry.gameName) {
@@ -118,3 +132,63 @@ try {
     if (Test-Path -LiteralPath $statusTemporary) { Remove-Item -LiteralPath $statusTemporary -Force }
 }
 Write-Output "Server PVE preset: $($entry.gameName) SHA-256 $hash"
+if ($PublishStatus) {
+    if ([string]::IsNullOrWhiteSpace($GitRepository)) {
+        $GitRepository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
+    }
+    $GitRepository = (Resolve-Path -LiteralPath $GitRepository).Path
+    $GitRepository = [IO.Path]::GetFullPath($GitRepository).TrimEnd('\')
+    $repoRootOutput = (& git -C $GitRepository rev-parse --show-toplevel 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "GitRepository is invalid: $repoRootOutput" }
+    $repoRoot = [IO.Path]::GetFullPath($repoRootOutput).TrimEnd('\')
+    if ($LASTEXITCODE -ne 0 -or $repoRoot -ine $GitRepository) { throw 'GitRepository must be the BAR-PVE repository root.' }
+    $branch = (& git -C $GitRepository branch --show-current 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $branch -cne 'pve/main') { throw 'PublishStatus requires the pve/main branch.' }
+    $staged = & git -C $GitRepository diff --cached --name-only 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Unable to inspect Git index: $staged" }
+    if (@($staged | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) {
+        throw 'Git index has staged changes; commit or unstage them before publishing status.'
+    }
+    $localChanges = & git -C $GitRepository status --porcelain -- status/server-version.json 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Unable to inspect status file: $localChanges" }
+    if (@($localChanges | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) {
+        throw 'status/server-version.json has local changes; inspect them before publishing.'
+    }
+    & git -C $GitRepository fetch origin pve/main
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch origin/pve/main before publishing status.' }
+    $divergence = (& git -C $GitRepository rev-list --left-right --count origin/pve/main...HEAD 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $divergence -cne "0`t0") {
+        throw "Local pve/main must match origin/pve/main before publishing; divergence: $divergence"
+    }
+    $publicPath = Join-Path $GitRepository 'status\server-version.json'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $publicPath) -Force | Out-Null
+    $publicTemporary = "$publicPath.tmp-$PID"
+    try {
+        [IO.File]::WriteAllText($publicTemporary, ($status | ConvertTo-Json -Depth 4),
+            [Text.UTF8Encoding]::new($false))
+        if (Test-Path -LiteralPath $publicPath -PathType Leaf) {
+            [IO.File]::Replace($publicTemporary, $publicPath, "$publicPath.bak")
+        } else {
+            [IO.File]::Move($publicTemporary, $publicPath)
+        }
+    } finally {
+        if (Test-Path -LiteralPath $publicTemporary) { Remove-Item -LiteralPath $publicTemporary -Force }
+    }
+    $publicStatusUrl = 'https://raw.githubusercontent.com/GodAlone945/Beyond-All-Reason/pve/main/status/server-version.json'
+    $publicJson = Get-Content -LiteralPath $publicPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $serverJson = Get-Content -LiteralPath $statusPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($publicJson.version -cne $serverJson.version -or $publicJson.sha256 -cne $serverJson.sha256) {
+        throw 'Public PVE status differs from the local server status.'
+    }
+    $publicChanges = & git -C $GitRepository status --porcelain -- status/server-version.json 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Unable to inspect public PVE status: $publicChanges" }
+    if (@($publicChanges | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) {
+        & git -C $GitRepository add -- status/server-version.json
+        if ($LASTEXITCODE -ne 0) { throw 'Unable to stage public PVE status.' }
+        & git -C $GitRepository -c user.name='BAR PVE Status' -c user.email='bar-pve-status@localhost' commit -m "Publish BAR PVE server status $($entry.version)"
+        if ($LASTEXITCODE -ne 0) { throw 'Unable to commit public PVE status.' }
+    }
+    & git -C $GitRepository push origin pve/main
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to push public PVE status to origin/pve/main.' }
+    Write-Output "Public PVE status: $publicStatusUrl"
+}

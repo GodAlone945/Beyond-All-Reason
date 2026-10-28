@@ -1,0 +1,9 @@
+{
+  "server_name": "BAR PVE",
+  "lobby_host": "frp-tag.com",
+  "lobby_port": 53984,
+  "room_name": "BAR PVE",
+  "pve_status_source": "https://raw.githubusercontent.com/GodAlone945/Beyond-All-Reason/pve/main/status/server-version.json",
+  "dev_source": "",
+  "dev_engine_version": "2026.07.04"
+}
