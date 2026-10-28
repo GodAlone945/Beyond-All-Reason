@@ -81,9 +81,20 @@ function Assert-Manifest([object]$m) {
     }
     if (-not $AllowLocalManifest) {
         $uri = [Uri]$m.package.url
-        if ($uri.Scheme -cne 'https' -or $uri.Host -notin @('github.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com')) {
-            throw 'Package URL must be an HTTPS GitHub Release asset.'
+        $expectedUrl = "https://github.com/GodAlone945/Beyond-All-Reason/releases/download/pve-v$($m.version)/$expected"
+        if ($uri.AbsoluteUri -cne $expectedUrl) {
+            throw 'Package URL must be the pinned PVE GitHub Release asset.'
         }
+    }
+}
+function Assert-Entry([object]$entry) {
+    if ($null -eq $entry) { throw 'PVE state entry is missing.' }
+    Assert-Version ([string]$entry.version)
+    if ($entry.gameName -cne "BAR PVE $($entry.version)" -or
+        $entry.fileName -cne "BAR-PVE-$($entry.version).sdz" -or
+        [string]$entry.sha256 -cnotmatch '^[a-f0-9]{64}$' -or
+        [int64]$entry.size -lt 1) {
+        throw 'PVE state entry is invalid.'
     }
 }
 $root = Assert-Store
@@ -94,6 +105,9 @@ $state = Get-State $statePath
 if ($Action -eq 'Status') { $state | ConvertTo-Json -Depth 8; exit 0 }
 Assert-Idle
 New-Item -ItemType Directory -Path $games,$staging -Force | Out-Null
+$lock = [IO.File]::Open((Join-Path $root 'update.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+try {
+$state = Get-State $statePath
 
 if ($Action -eq 'Install') {
     if ([string]::IsNullOrWhiteSpace($Manifest)) { throw 'Install requires -Manifest.' }
@@ -108,15 +122,33 @@ if ($Action -eq 'Install') {
         $m = Invoke-RestMethod -Uri $manifestUri -UseBasicParsing
     }
     Assert-Manifest $m
+    if (-not $AllowLocalManifest) {
+        $expectedManifest = "https://github.com/GodAlone945/Beyond-All-Reason/releases/download/pve-v$($m.version)/manifest.json"
+        if ($Manifest -cne $expectedManifest) { throw 'Manifest URL does not match the pinned PVE release.' }
+    }
     $destination = Join-Path $games $m.package.fileName
     $stagePath = Join-Path $staging ($m.package.fileName + ".part-$PID")
     try {
-        if (-not (Test-Path -LiteralPath $destination -PathType Leaf)) {
+        $needsDownload = -not (Test-Path -LiteralPath $destination -PathType Leaf)
+        if (-not $needsDownload) {
+            try {
+                Assert-File $destination $m.package
+                Assert-Archive $destination $m.version
+            } catch {
+                $needsDownload = $true
+            }
+        }
+        if ($needsDownload) {
             if ($AllowLocalManifest) { Copy-Item -LiteralPath $m.package.url -Destination $stagePath }
             else { Invoke-WebRequest -Uri $m.package.url -OutFile $stagePath -UseBasicParsing | Out-Null }
             Assert-File $stagePath $m.package
             Assert-Archive $stagePath $m.version
-            [IO.File]::Move($stagePath, $destination)
+            Assert-Idle
+            if (Test-Path -LiteralPath $destination -PathType Leaf) {
+                [IO.File]::Replace($stagePath, $destination, "$destination.corrupt.bak")
+            } else {
+                [IO.File]::Move($stagePath, $destination)
+            }
         }
         Assert-File $destination $m.package
         Assert-Archive $destination $m.version
@@ -132,6 +164,7 @@ if ($Action -eq 'Install') {
         if ($null -ne $state.active -and $state.active.version -cne $entry.version) {
             $history = @($state.active) + $history
         }
+        Assert-Idle
         Save-State $statePath ([pscustomobject]@{ schemaVersion = 1; active = $entry; history = $history })
         Write-Output "Active: $($entry.gameName)"
     }
@@ -141,11 +174,14 @@ else {
     Assert-Version $Version
     $candidate = @($state.history | Where-Object { $_.version -ceq $Version }) | Select-Object -First 1
     if ($null -eq $candidate) { throw "No retained verified version: $Version" }
+    Assert-Entry $candidate
     $candidatePath = Join-Path $games $candidate.fileName
     Assert-File $candidatePath $candidate
     Assert-Archive $candidatePath $candidate.version
     $history = @($state.history | Where-Object { $_.version -cne $Version })
     if ($null -ne $state.active) { $history = @($state.active) + $history }
+    Assert-Idle
     Save-State $statePath ([pscustomobject]@{ schemaVersion = 1; active = $candidate; history = $history })
     Write-Output "Rolled back: $($candidate.gameName)"
 }
+} finally { $lock.Dispose() }

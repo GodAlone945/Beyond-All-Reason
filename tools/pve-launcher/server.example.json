@@ -1,0 +1,9 @@
+{
+  "server_name": "BAR PVE Local",
+  "lobby_host": "127.0.0.1",
+  "lobby_port": 8200,
+  "room_name": "BAR PVE",
+  "pve_status_source": "D:\\BeyondAllReason\\BAR-Server\\pve-data\\server-version.json",
+  "dev_source": "D:\\BeyondAllReason\\BAR-PVE",
+  "dev_engine_version": "2026.07.04"
+}
