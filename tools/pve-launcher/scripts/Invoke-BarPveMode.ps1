@@ -69,6 +69,21 @@ function Get-LocalServerReadiness([object]$status) {
         $process.StartTime.ToUniversalTime().Ticks -ne [int64]$state.StartTicksUtc) {
         return [pscustomobject]@{ ready = $false; reason = '本地 SPADS 进程未运行，服务器状态文件已过期。' }
     }
+    $spadsLog = Join-Path $serverRoot 'spads\var\log\spads.log'
+    if (-not (Test-Path -LiteralPath $spadsLog -PathType Leaf)) {
+        return [pscustomobject]@{ ready = $false; reason = 'SPADS 托管日志尚未生成。' }
+    }
+    $hostingLines = [regex]::Matches((Get-Content -LiteralPath $spadsLog -Raw -Encoding UTF8),
+        '(?m)^(?<stamp>[0-9]{14}) - .*?Hosting game "(?<game>[^"]+)" using engine version "(?<engine>[^"]+)"')
+    $started = $process.StartTime.ToString('yyyyMMddHHmmss')
+    $hosted = @($hostingLines | Where-Object { $_.Groups['stamp'].Value -ge $started } | Select-Object -Last 1)
+    if ($hosted.Count -eq 0) {
+        return [pscustomobject]@{ ready = $false; reason = 'SPADS 已运行，但 PVE 房间尚未托管成功。' }
+    }
+    if ($hosted[0].Groups['game'].Value -cne $status.gameName -or
+        $hosted[0].Groups['engine'].Value -cne $status.engineVersion) {
+        return [pscustomobject]@{ ready = $false; reason = '当前 SPADS 房间的游戏包或引擎与 PVE 服务器状态不一致。' }
+    }
     return [pscustomobject]@{ ready = $true; reason = '本地 PVE 房间和服务器进程已就绪。' }
 }
 function Assert-ManifestMatches([object]$status, [object]$manifest) {
@@ -245,10 +260,21 @@ $updater = Join-Path $PSScriptRoot 'pve-distribution\Update-BarPve.ps1'
 if (-not (Test-Path -LiteralPath $updater -PathType Leaf)) { throw "Missing PVE updater: $updater" }
 if ($Action -eq 'RollbackPve') {
     if ([string]::IsNullOrWhiteSpace($Version)) { throw 'Choose a historical PVE version.' }
-    & $updater -Action Rollback -StoreRoot $store -Version $Version | Out-Null
-    $state = Get-StoreState $store
-    $link = Add-ClientGameLink $data $store $state.active
-    [pscustomobject]@{ mode = 'pve'; active = $state.active; gameFile = $link } | ConvertTo-Json -Depth 5 -Compress
+    $previous = (Get-StoreState $store).active
+    try {
+        & $updater -Action Rollback -StoreRoot $store -Version $Version | Out-Null
+        $state = Get-StoreState $store
+        $link = Add-ClientGameLink $data $store $state.active
+        [pscustomobject]@{ mode = 'pve'; active = $state.active; gameFile = $link } | ConvertTo-Json -Depth 5 -Compress
+    } catch {
+        if ($null -ne $previous) {
+            $current = (Get-StoreState $store).active
+            if ($null -ne $current -and $current.version -cne $previous.version) {
+                & $updater -Action Rollback -StoreRoot $store -Version $previous.version | Out-Null
+            }
+        }
+        throw
+    }
     exit 0
 }
 $server = Read-ServerStatus

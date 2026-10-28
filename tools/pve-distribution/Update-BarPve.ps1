@@ -17,7 +17,7 @@ function Assert-Store {
     return $full
 }
 function Assert-Idle {
-    if (@(Get-Process -Name spring, spring-headless -ErrorAction SilentlyContinue).Count -gt 0) {
+    if (@(Get-Process -Name spring, spring-headless, spring-dedicated -ErrorAction SilentlyContinue).Count -gt 0) {
         throw 'Recoil is running. Close the game before activating or rolling back a PVE version.'
     }
 }

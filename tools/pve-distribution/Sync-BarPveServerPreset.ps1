@@ -1,10 +1,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$ServerRoot,
-    [switch]$CheckOnly
+    [switch]$CheckOnly,
+    [switch]$ActivateDefault
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+if ($CheckOnly -and $ActivateDefault) { throw 'CheckOnly and ActivateDefault cannot be combined.' }
 
 $root = [IO.Path]::GetFullPath($ServerRoot).TrimEnd('\')
 $store = Join-Path $root 'pve-data'
@@ -72,6 +74,25 @@ if ($current -cne $entry.gameName) {
             "$presetPath.pre-pve-$(Get-Date -Format 'yyyyMMdd-HHmmss')")
     } finally {
         if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+    }
+}
+if ($ActivateDefault) {
+    $defaultSection = [regex]::Match($spadsText, '(?ms)^\[default\]\r?\n.*?(?=^\[|\z)')
+    if (-not $defaultSection.Success) { throw 'SPADS default section is missing.' }
+    $defaultHosting = [regex]::Matches($defaultSection.Value, '(?m)^hostingPreset:[^\r\n]*')
+    if ($defaultHosting.Count -ne 1) { throw 'SPADS default section has no unique hostingPreset.' }
+    if ($defaultHosting[0].Value -cne 'hostingPreset:pve') {
+        $updatedSection = $defaultSection.Value.Replace($defaultHosting[0].Value, 'hostingPreset:pve')
+        $updatedText = $spadsText.Substring(0, $defaultSection.Index) + $updatedSection +
+            $spadsText.Substring($defaultSection.Index + $defaultSection.Length)
+        $temporary = "$spadsPath.tmp-$PID"
+        try {
+            [IO.File]::WriteAllText($temporary, $updatedText, [Text.Encoding]::ASCII)
+            [IO.File]::Replace($temporary, $spadsPath,
+                "$spadsPath.pre-pve-$(Get-Date -Format 'yyyyMMdd-HHmmss')")
+        } finally {
+            if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+        }
     }
 }
 $status = [ordered]@{
