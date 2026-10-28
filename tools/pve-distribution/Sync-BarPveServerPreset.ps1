@@ -188,7 +188,7 @@ if ($PublishStatus) {
         [IO.File]::WriteAllText($publicTemporary, ($status | ConvertTo-Json -Depth 4),
             [Text.UTF8Encoding]::new($false))
         if (Test-Path -LiteralPath $publicPath -PathType Leaf) {
-            [IO.File]::Replace($publicTemporary, $publicPath, "$publicPath.bak")
+            [IO.File]::Replace($publicTemporary, $publicPath, $null)
         } else {
             [IO.File]::Move($publicTemporary, $publicPath)
         }
