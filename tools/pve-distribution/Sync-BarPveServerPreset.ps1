@@ -184,16 +184,23 @@ if ($PublishStatus) {
     $publicPath = Join-Path $GitRepository 'status\server-version.json'
     New-Item -ItemType Directory -Path (Split-Path -Parent $publicPath) -Force | Out-Null
     $publicTemporary = "$publicPath.tmp-$PID"
+    $publicBackupTemporary = "$publicTemporary.bak"
     try {
         [IO.File]::WriteAllText($publicTemporary, ($status | ConvertTo-Json -Depth 4),
             [Text.UTF8Encoding]::new($false))
         if (Test-Path -LiteralPath $publicPath -PathType Leaf) {
-            [IO.File]::Replace($publicTemporary, $publicPath, $null)
+            [IO.File]::Replace($publicTemporary, $publicPath, $publicBackupTemporary)
+            if (Test-Path -LiteralPath $publicBackupTemporary -PathType Leaf) {
+                Remove-Item -LiteralPath $publicBackupTemporary -Force
+            }
         } else {
             [IO.File]::Move($publicTemporary, $publicPath)
         }
     } finally {
         if (Test-Path -LiteralPath $publicTemporary) { Remove-Item -LiteralPath $publicTemporary -Force }
+        if (Test-Path -LiteralPath $publicBackupTemporary -PathType Leaf) {
+            Remove-Item -LiteralPath $publicBackupTemporary -Force
+        }
     }
     $publicStatusUrl = 'https://raw.githubusercontent.com/GodAlone945/Beyond-All-Reason/pve/main/status/server-version.json'
     $publicJson = Get-Content -LiteralPath $publicPath -Raw -Encoding UTF8 | ConvertFrom-Json
