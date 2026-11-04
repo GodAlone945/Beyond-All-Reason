@@ -1,5 +1,8 @@
-local blueprintConfig =
-	VFS.Include("luarules/gadgets/ruins/Blueprints/" .. Game.gameShortName .. "/blueprint_tiers.lua")
+local blueprintRoot = "luarules/gadgets/ruins/Blueprints/" .. Game.gameShortName
+if not VFS.FileExists(blueprintRoot .. "/blueprint_tiers.lua") then
+	blueprintRoot = "luarules/gadgets/ruins/Blueprints/BYAR"
+end
+local blueprintConfig = VFS.Include(blueprintRoot .. "/blueprint_tiers.lua")
 local tiers = blueprintConfig.Tiers
 local types = blueprintConfig.BlueprintTypes
 
@@ -40,7 +43,7 @@ local blueprintsConfig = {
 	[1] = {
 		table = constructorBlueprints,
 		tiered = true,
-		directory = "luarules/gadgets/ruins/Blueprints/" .. Game.gameShortName .. "/Blueprints/",
+		directory = blueprintRoot .. "/Blueprints/",
 	},
 }
 

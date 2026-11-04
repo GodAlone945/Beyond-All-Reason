@@ -38,7 +38,8 @@ $files = @(Get-ChildItem -LiteralPath $source -Recurse -File -Force | Where-Obje
     $relative = $_.FullName.Substring($source.Length + 1)
     $first = ($relative -split '[\\/]')[0]
     $first -notin $excluded -and -not $first.StartsWith('.') -and
-    $relative -notmatch '(^|[\\/])\.git([\\/]|$)'
+    $relative -notmatch '(^|[\\/])\.git([\\/]|$)' -and
+    $relative -notmatch '(?i)(\.bak|\.before-[^\\/]+)$'
 } | Sort-Object { $_.FullName.Substring($source.Length + 1) })
 if ($files.Count -lt 1000) { throw 'Source tree is incomplete; refusing to package.' }
 $zip = [IO.Compression.ZipFile]::Open($archivePath, [IO.Compression.ZipArchiveMode]::Create)

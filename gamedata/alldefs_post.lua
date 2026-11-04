@@ -66,6 +66,9 @@ local airReworkWeaponTweaks = airRework.WeaponTweaks
 local empRework = require("unitbasedefs/emp_rework")
 local empReworkUnitTweaks = empRework.UnitTweaks
 local empReworkWeaponTweaks = empRework.WeaponTweaks
+local roguelikeUnitTweaksModule = require("unitbasedefs/roguelike_unit_tweaks")
+local roguelikeUnitTweaks = roguelikeUnitTweaksModule.UnitTweaks
+local roguelikeShieldInterceptBit = roguelikeUnitTweaksModule.ShieldInterceptBit
 
 local scavWeaponDefPost = require("gamedata/scavengers/weapondef_post").scavWeaponDefPost
 
@@ -665,6 +668,7 @@ local function unitDef_Post(name, uDef)
 	if modOptions.skyshift == true then
 		uDef = skyshiftUnitTweaks(name, uDef)
 	end
+	uDef = roguelikeUnitTweaks(name, uDef, modOptions)
 
 	-- Proposed Unit Reworks
 	if modOptions.proposed_unit_reworks == true then
@@ -1124,6 +1128,22 @@ local function weaponDef_Post(name, wDef)
 			wDef.interceptedbyshieldtype = 512 --make dgun (like behemoth) interceptable by shields, optionally
 		elseif wDef.weapontype == "StarburstLauncher" and not string.find(name, "raptor") then
 			wDef.interceptedbyshieldtype = 1024 --separate from combined MissileLauncher, except raptors
+		end
+
+		-- Roguelike commanders use a repulser that must cover even weapons whose
+		-- stock definition explicitly has interceptedbyshieldtype=0. A private bit
+		-- keeps ordinary BAR shields unchanged while enabling those weapons to hit
+		-- this mode-only shield.
+		local roguelikeMode = modOptions.roguelike_mode
+		if roguelikeMode == true or roguelikeMode == 1 or roguelikeMode == "1" or roguelikeMode == "true" then
+			if wDef.weapontype ~= "Shield" then
+				local interceptMask = tonumber(wDef.interceptedbyshieldtype or wDef.interceptedByShieldType) or 0
+				local bit = roguelikeShieldInterceptBit
+				if math.floor(interceptMask / bit) % 2 == 0 then
+					interceptMask = interceptMask + bit
+				end
+				wDef.interceptedbyshieldtype = interceptMask
+			end
 		end
 
 		local shieldModOption = modOptions.experimentalshields

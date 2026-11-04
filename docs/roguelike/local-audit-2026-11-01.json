@@ -1,0 +1,182 @@
+{
+    "capturedUtc":  "2026-11-01T14:39:02.6324641Z",
+    "sourceVersion":  "0.1.0-dev.3",
+    "roomGame":  "BAR PVE 0.1.0-dev.3",
+    "roomMatchesSourceName":  true,
+    "publishedGame":  "BAR PVE 0.1.0-dev.2",
+    "publishedMatchesRoomName":  false,
+    "clientLink":  {
+                       "path":  "D:\\BeyondAllReason\\Beyond-All-Reason\\data\\games\\BAR-PVE.sdd",
+                       "target":  "D:\\BeyondAllReason\\BAR-PVE",
+                       "matchesSource":  true
+                   },
+    "serverLink":  {
+                       "path":  "D:\\BeyondAllReason\\BAR-Server\\pve-data\\games\\BAR-PVE.sdd",
+                       "target":  "D:\\BeyondAllReason\\BAR-PVE",
+                       "matchesSource":  true
+                   },
+    "lastStartscript":  {
+                            "note":  "Last generated script, not the live room or evidence of current gameplay.",
+                            "lastWriteUtc":  "2026-11-01T12:08:56.6487603Z",
+                            "settings":  {
+                                             "roguelike_mode":  "1",
+                                             "roguelike_coop":  "0",
+                                             "roguelike_weapon_effect_tests":  "1",
+                                             "startpostype":  "2",
+                                             "numplayers":  "1",
+                                             "gametype":  "BAR PVE 0.1.0-dev.3"
+                                         }
+                        },
+    "roguelikeSourceFingerprint":  "e4c8633a6bb1d67338240195bfbc565c89bb32d7cf33ddd7104e8b1f89615c46",
+    "fingerprintScope":  "Feature source and selected integration files only; compare full archive/engine hashes for release multiplayer.",
+    "files":  [
+                  {
+                      "path":  "effects/roguelike_drone_repair.lua",
+                      "sha256":  "14f16fbe3a0e0c2614f760029ddd05d173122e92c320beb7e27be85a84a922da"
+                  },
+                  {
+                      "path":  "effects/roguelike_weapon_effects.lua",
+                      "sha256":  "fe1b0707ca4396894dba72dff48752db88f51d3a28e815ae7ab6d2d72e9d9d32"
+                  },
+                  {
+                      "path":  "features/roguelike_medkit.lua",
+                      "sha256":  "e500cc86c1ee1f5b804b6ec28b8a7a5a7dd0a76db997864d5264e19f2ed6b765"
+                  },
+                  {
+                      "path":  "gamedata/alldefs_post.lua",
+                      "sha256":  "7d64915a5dc7bebdf4669c2b36713ebc57aa4d4b9f46b8e8986531e42794ae6d"
+                  },
+                  {
+                      "path":  "language/en/commands.json",
+                      "sha256":  "eb00e781a0f731b8526939f27ee6713c125c004224681647482e93cc4e9d0abf"
+                  },
+                  {
+                      "path":  "language/en/interface.json",
+                      "sha256":  "a51e61afe75f853b7ef8a46f2b0793badcd9078453ca5679c34726d3f5c3232e"
+                  },
+                  {
+                      "path":  "language/zh/commands.json",
+                      "sha256":  "15d60a7f0477d0fe501ec6b57df7857e7e994841e7b93fdd82f1891bc8f87a2c"
+                  },
+                  {
+                      "path":  "luarules/gadgets/game_roguelike_faction_weapons.lua",
+                      "sha256":  "3a658635a161c9e890c4ece89b13aadaf21dde48ff63d3c6ace5ce3f8806ac1e"
+                  },
+                  {
+                      "path":  "luarules/gadgets/game_roguelike_orbit_drones.lua",
+                      "sha256":  "ef337258ac395712f658ea5f2e0d07abd34df8bab3be4764d1bf5559c218a0c5"
+                  },
+                  {
+                      "path":  "luarules/gadgets/game_roguelike_salvage.lua",
+                      "sha256":  "7fcb8d27dc1d6f6d2d5c1576a105ff2094181c50d2443cef3e4d5f93d03a0029"
+                  },
+                  {
+                      "path":  "luarules/gadgets/game_roguelike_spawner.lua",
+                      "sha256":  "330ba4e5ee62df338dfb49db1ed2ec77bcd1f55bcb5ac8c9951497dd5ee3b849"
+                  },
+                  {
+                      "path":  "luarules/gadgets/game_roguelike_upgrades.lua",
+                      "sha256":  "2615263a00475ffaa2c1f26e31076697ff7a6072718eecb07a96f3d0a9732fe0"
+                  },
+                  {
+                      "path":  "luarules/gadgets/game_roguelike_weapon_effects.lua",
+                      "sha256":  "2b291f063bd91f18cff2dcf49657806620febf7ee427b5e86b27e93df3491f88"
+                  },
+                  {
+                      "path":  "luarules/gadgets/raptor_spawner_defense.lua",
+                      "sha256":  "68889818fef28d7d951f5c71787f97fbc0245511e9fb311dc5f3ff547f8c0bec"
+                  },
+                  {
+                      "path":  "luarules/gadgets/scav_spawner_defense.lua",
+                      "sha256":  "0f02d82e3774b20730a3f07884f62a34ec95b39fd02568a6aafe7a5228e0f85b"
+                  },
+                  {
+                      "path":  "luarules/gadgets/unit_aa_targeting_priority.lua",
+                      "sha256":  "8045c31f39ad62202c34003836c4e4fd48f65a502550d99b8562084f3ec1e55e"
+                  },
+                  {
+                      "path":  "luarules/gadgets/unit_lightning_splash_dmg.lua",
+                      "sha256":  "6cf9cb53ad6fbb16975e9539f4b952bb26ae8a2d0d48c99d2db4179fe3ce8520"
+                  },
+                  {
+                      "path":  "luaui/rml_setup.lua",
+                      "sha256":  "3ab0e60138453fb9151991998c275eb74848093fdc9a13e67630b14fa45e3cb8"
+                  },
+                  {
+                      "path":  "luaui/RmlWidgets/gui_roguelike/gui_roguelike.lua",
+                      "sha256":  "fe4625647eca06c56eedb54c7fddb390daf9d9319a7673a009c15826039704dc"
+                  },
+                  {
+                      "path":  "luaui/RmlWidgets/gui_roguelike/gui_roguelike.rcss",
+                      "sha256":  "73adcdae4ec9eea966e1d9cb5c6f0673d375b9399937b6c924c276c4e2965546"
+                  },
+                  {
+                      "path":  "luaui/RmlWidgets/gui_roguelike/gui_roguelike.rml",
+                      "sha256":  "e90bec2c5b1ebd92e9e3049e8ae6e17eba685bc0373c55c32e845959d31e6831"
+                  },
+                  {
+                      "path":  "luaui/Widgets/gui_buildmenu.lua",
+                      "sha256":  "44590fbcc51a231f1790a589f0004e7f46dd01a0af86b215f99b9ebfe985bed9"
+                  },
+                  {
+                      "path":  "modinfo.lua",
+                      "sha256":  "8ff8e2fb6f017b6e4d38c2d08be025b1d7ebdb4ec83ccc24bdee3942cb9e90b0"
+                  },
+                  {
+                      "path":  "modoptions.lua",
+                      "sha256":  "d7c968154c0fdd149287f74fde91e4b94d6659ae788db8f563e3ded884569592"
+                  },
+                  {
+                      "path":  "modules/customcommands.lua",
+                      "sha256":  "9d751100c6b18201beae23c4f34da1933d561a16b5b0672b5b0974096795cf51"
+                  },
+                  {
+                      "path":  "scripts/Units/armcom_lus.lua",
+                      "sha256":  "cf79f85410c63f67fc09809e9a3af70dbff6575efda91ab79576e228592d2891"
+                  },
+                  {
+                      "path":  "scripts/Units/corcom_roguelike.cob",
+                      "sha256":  "cf3ef94cbe7a779321bf374d72d1427daebca9f5564e4cb0b92ce2f28bae4668"
+                  },
+                  {
+                      "path":  "scripts/Units/legcom_roguelike.cob",
+                      "sha256":  "28730a85d9d987ab3c0bf70dfb799bc5bbaf93d12239fd5cd410b94bd9b35b5b"
+                  },
+                  {
+                      "path":  "tools/pve-launcher/Program.cs",
+                      "sha256":  "b8cfb0d75f1bfcf7a9ae68e27108c3fb12e5fc1b520c3af5704e01f708c0c36c"
+                  },
+                  {
+                      "path":  "tools/pve-launcher/scripts/Invoke-BarPveMode.ps1",
+                      "sha256":  "02ea5829228ffcce8b2d3ef262f0ca3c59278f349db3cf69be0a14e617ee3205"
+                  },
+                  {
+                      "path":  "unitbasedefs/roguelike_unit_tweaks.lua",
+                      "sha256":  "8b47251f60a54067980942b49eaacb70d29ef49d1210ca9354f016e29ba69c96"
+                  },
+                  {
+                      "path":  "unitbasedefs/roguelike_weapon_catalog.lua",
+                      "sha256":  "dd98c2d5895675fbed50f479a2e3b15576e2753fd7155f8385ee9a8c123d2d8b"
+                  },
+                  {
+                      "path":  "unitbasedefs/roguelike_weapon_effects.lua",
+                      "sha256":  "f909487a8cc87298f87656eba36a0fffb36cfb5acae8732e691fcf0845eb5c09"
+                  },
+                  {
+                      "path":  "units/RoguelikeDrones/arm_electric_drone.lua",
+                      "sha256":  "314e1bf8189981e742deb12b25e922169217f16579a2e085da797283d2ff390d"
+                  },
+                  {
+                      "path":  "units/RoguelikeDrones/arm_fire_drone.lua",
+                      "sha256":  "2a410def66db4903b5143df357f04d6e8fe4885582fe5e03df2e0cd5193b87a8"
+                  },
+                  {
+                      "path":  "units/RoguelikeDrones/leg_laser_drone.lua",
+                      "sha256":  "382d039a320cd0eb0530f2ae54892ed9c49a39569dc304434dd4cbbb0f799aad"
+                  },
+                  {
+                      "path":  "weapons/roguelike_meteor_payload.lua",
+                      "sha256":  "513857688b84452654655ce7df050e134d593c067daa9963189ff53c1f48f06f"
+                  }
+              ]
+}

@@ -102,6 +102,7 @@ local buildmenuRenderedCells = 0
 local math_isInRect = math.isInRect
 
 local buildmenuShows = false
+local roguelikeBuildMenuSuppressed = false
 local refreshBuildmenu = true
 local delayRefresh
 
@@ -821,7 +822,9 @@ function widget:Update(dt)
 	--[[ MODIFICATION END ]]
 
 	local prevBuildmenuShows = buildmenuShows
-	if not preGamestartPlayer and selectedBuilderCount == 0 and not alwaysShow then
+	if roguelikeBuildMenuSuppressed then
+		buildmenuShows = false
+	elseif not preGamestartPlayer and selectedBuilderCount == 0 and not alwaysShow then
 		buildmenuShows = false
 	else
 		buildmenuShows = true
@@ -2394,6 +2397,9 @@ function widget:Initialize()
 	end
 	WG.buildmenu.getIsShowing = function()
 		return buildmenuShows
+	end
+	WG.buildmenu.setRoguelikeSuppressed = function(suppressed)
+		roguelikeBuildMenuSuppressed = suppressed == true
 	end
 	---@class CostLine
 	---@field value number?

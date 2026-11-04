@@ -1,0 +1,153 @@
+<rml>
+<head>
+    <link type="text/rcss" href="gui_roguelike.rcss" />
+</head>
+<body data-model="roguelike_model">
+    <!--
+        [RML 结构层]
+        本文档只声明 HUD、升级弹窗和商店的元素层级与数据绑定。
+        绑定值由 gui_roguelike.lua 写入；点击只产生本地事件，权威校验在 synced Gadget。
+    -->
+    <!-- 顶部战斗状态：数据全部来自 synced UnitRulesParam。 -->
+    <div id="wave-status" class="wave-status-root">
+        <div class="wave-status-panel">
+            <span class="wave-status-phase">{{topPhase}}</span>
+            <span class="wave-status-separator">·</span>
+            <span class="wave-status-time">{{topCountdown}}</span>
+            <span class="wave-status-separator">·</span>
+            <span class="wave-status-units">{{topUnits}}</span>
+            <span class="wave-status-separator">·</span>
+            <span class="wave-status-role">{{topRoleLevel}}</span>
+            <span class="wave-status-separator">·</span>
+            <span class="wave-status-kills">{{topKills}}</span>
+        </div>
+    </div>
+
+    <!-- 左侧 HUD -->
+    <div id="roguelike-hud" class="hud-root">
+        <div class="hud-panel">
+            <div class="hud-row">
+                <span class="hud-label">击杀</span>
+                <span class="hud-value">{{kills}}</span>
+            </div>
+            <div class="hud-divider"></div>
+            <div class="hud-row">
+                <span class="hud-label">攻速</span>
+                <div class="hud-bar-bg">
+                    <!-- Width is updated directly by the Lua controller. -->
+                    <div id="atk-bar-fill" class="hud-bar-fill atk-fill"></div>
+                </div>
+                <span class="hud-stat-num">{{atkMult}}</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">移速</span>
+                <div class="hud-bar-bg">
+                    <div id="spd-bar-fill" class="hud-bar-fill spd-fill"></div>
+                </div>
+                <span class="hud-stat-num">{{spdMult}}</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">生命</span>
+                <div class="hud-bar-bg">
+                    <div id="hp-bar-fill" class="hud-bar-fill hp-fill"></div>
+                </div>
+                <span class="hud-stat-num">{{hpMult}}</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">射程</span>
+                <div class="hud-bar-bg">
+                    <div id="rng-bar-fill" class="hud-bar-fill rng-fill"></div>
+                </div>
+                <span class="hud-stat-num">{{rngMult}}</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">视野</span>
+                <div class="hud-bar-bg">
+                    <div id="vis-bar-fill" class="hud-bar-fill vis-fill"></div>
+                </div>
+                <span class="hud-stat-num">{{visMult}}</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">护盾</span>
+                <span class="hud-value shield-value">{{shield}}</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">缓冲</span>
+                <span class="hud-value shield-value">{{barrier}}</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">护甲</span>
+                <span class="hud-value">{{armor}}</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">无人机</span>
+                <span class="hud-value">{{droneLevel}}</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">汲取</span>
+                <span class="hud-value heal-build-value">{{healBuild}}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 生存技能只发送请求；冷却与成功结果由 Synced Gadget 回传。 -->
+    <div id="survival-skill-bar" class="survival-skill-bar">
+        <div id="skill-nanorepair" class="survival-skill"><span>纳米修复</span><small id="skill-status-nanorepair">就绪</small></div>
+        <div id="skill-thruster" class="survival-skill"><span>应急推进</span><small id="skill-status-thruster">就绪</small></div>
+        <div id="skill-faction" class="survival-skill"><span id="skill-faction-name">阵营技能</span><small id="skill-status-faction">就绪</small></div>
+        <div id="skill-medical-beacon" class="survival-skill"><span>治疗信标</span><small id="skill-status-medical-beacon">未解锁</small></div>
+    </div>
+
+    <!-- 升级选择遮罩 -->
+    <div id="upgrade-overlay" class="upgrade-overlay hidden">
+        <div class="upgrade-title">选择一项升级</div>
+        <div id="upgrade-subtitle" class="upgrade-subtitle">角色等级提升生命与伤害；选择一张属性或防御卡 · 按 1 / 2 / 3</div>
+        <div class="upgrade-cards">
+            <div id="upgrade-card-0" class="upgrade-card">
+                <div class="card-key">[1]</div>
+                <div id="card-icon-0" class="card-icon"></div>
+                <div id="card-name-0" class="card-name"></div>
+                <div id="card-desc-0" class="card-desc"></div>
+            </div>
+            <div id="upgrade-card-1" class="upgrade-card">
+                <div class="card-key">[2]</div>
+                <div id="card-icon-1" class="card-icon"></div>
+                <div id="card-name-1" class="card-name"></div>
+                <div id="card-desc-1" class="card-desc"></div>
+            </div>
+            <div id="upgrade-card-2" class="upgrade-card">
+                <div class="card-key">[3]</div>
+                <div id="card-icon-2" class="card-icon"></div>
+                <div id="card-name-2" class="card-name"></div>
+                <div id="card-desc-2" class="card-desc"></div>
+            </div>
+        </div>
+        <div class="upgrade-actions">
+            <div id="upgrade-refresh" class="upgrade-action">重抽（2）</div>
+            <div id="upgrade-banish" class="upgrade-action">移除候选（1）</div>
+            <div id="upgrade-skip" class="upgrade-action">跳过（1）</div>
+            <div id="upgrade-action-status" class="upgrade-action-status"></div>
+        </div>
+    </div>
+
+    <!-- 商店遮罩 -->
+    <div id="shop-overlay" class="shop-overlay hidden">
+        <div class="shop-title">战场商店</div>
+        <div id="shop-metal" class="shop-metal">金属：0</div>
+        <div id="shop-items" class="shop-items">
+            <!-- 商品列表由 Lua 动态填充 -->
+        </div>
+        <div id="shop-close" class="shop-close">关闭 [Esc]</div>
+    </div>
+
+    <!-- 通知弹幕 -->
+    <div id="owned-upgrades" class="owned-upgrades-root">
+        <div id="owned-upgrades-handle" class="owned-upgrades-handle">已升级选项</div>
+        <div id="owned-upgrades-content" class="owned-upgrades-content">
+            <div class="owned-upgrades-empty">尚无已升级选项</div>
+        </div>
+    </div>
+
+    <div id="notification-area" class="notification-area"></div>
+</body>
+</rml>

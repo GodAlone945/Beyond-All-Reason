@@ -5,7 +5,8 @@ param(
     [string]$StatusSource,
     [string]$DevSource,
     [string]$Version,
-    [string]$DevEngineVersion = '2026.07.04'
+    [string]$DevEngineVersion = '2026.07.04',
+    [switch]$Roguelike
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -224,6 +225,7 @@ function Launch-DevelopmentGame([string]$dataDirectory) {
   [ALLYTEAM0] { NumAllies=0; }
   [TEAM0] { TeamLeader=0; AllyTeam=0; Side=Armada; }
   [PLAYER0] { Team=0; }
+  [MODOPTIONS] { roguelike_mode=$([int][bool]$Roguelike); roguelike_weapon_effect_tests=0; }
 }
 "@
     [IO.File]::WriteAllText($startScript, $script, [Text.UTF8Encoding]::new($false))
@@ -237,12 +239,77 @@ function Launch-DevelopmentGame([string]$dataDirectory) {
         if ($null -eq $previousDataDir) { Remove-Item Env:SPRING_DATADIR -ErrorAction SilentlyContinue }
         else { $env:SPRING_DATADIR = $previousDataDir }
     }
-    return [pscustomobject]@{ mode = 'development'; gameName = $gameName; source = $source }
+    return [pscustomobject]@{ mode = 'development'; roguelike = [bool]$Roguelike; gameName = $gameName; source = $source }
 }
 
 $resolvedConfig = Assert-BarClientConfigPath -ConfigPath $ConfigPath
 $data = Split-Path -Parent $resolvedConfig
 $store = Join-Path $data 'bar-pve'
+# A local SPADS room can host the BAR-PVE.sdd worktree while release state remains pinned to an older archive.
+if ($Action -in @('Status', 'PreparePve') -and
+    -not [string]::IsNullOrWhiteSpace($DevSource) -and
+    -not [string]::IsNullOrWhiteSpace($StatusSource) -and
+    $StatusSource -notmatch '^https://' -and
+    (Split-Path -Leaf $StatusSource) -ceq 'server-version.json' -and
+    (Test-Path -LiteralPath $DevSource -PathType Container)) {
+    $source = (Resolve-Path -LiteralPath $DevSource).Path
+    $metadata = Get-Content -LiteralPath (Join-Path $source 'modinfo.lua') -Raw -Encoding UTF8
+    $versionMatch = [regex]::Match($metadata, "(?m)^\s*version\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?)'")
+    if ($metadata -match "(?m)^\s*name\s*=\s*'BAR PVE'" -and $versionMatch.Success) {
+        $version = $versionMatch.Groups[1].Value
+        $gameName = "BAR PVE $version"
+        $pveData = Split-Path -Parent ([IO.Path]::GetFullPath($StatusSource))
+        if ((Split-Path -Leaf $pveData) -ieq 'pve-data') {
+            $presetPath = Join-Path (Split-Path -Parent $pveData) 'spads\etc\hostingPresets.conf'
+            $presetText = Get-Content -LiteralPath $presetPath -Raw -Encoding UTF8
+            $pvePreset = [regex]::Match($presetText, '(?ms)^\[pve<default>\]\s*(?<body>.*?)(?=^\[|\z)')
+            if ($pvePreset.Success -and
+                $pvePreset.Groups['body'].Value -match ('(?m)^modName:' + [regex]::Escape($gameName) + '\s*$')) {
+                $devServer = [pscustomobject]@{
+                    schemaVersion = 1
+                    channel = 'pve-development'
+                    version = $version
+                    gameName = $gameName
+                    engineVersion = $DevEngineVersion
+                    source = $source
+                }
+                $readiness = Get-LocalServerReadiness $devServer
+                $serverLink = Join-Path $pveData 'games\BAR-PVE.sdd'
+                $clientLink = Join-Path $data 'games\BAR-PVE.sdd'
+                $serverItem = Get-Item -LiteralPath $serverLink -Force -ErrorAction SilentlyContinue
+                $serverLinkReady = $null -ne $serverItem -and $serverItem.LinkType -eq 'Junction' -and
+                    [IO.Path]::GetFullPath([string](@($serverItem.Target)[0])).TrimEnd('\') -ieq $source.TrimEnd('\')
+                if ($readiness.ready -and -not $serverLinkReady) {
+                    $readiness = [pscustomobject]@{ ready = $false; reason = 'SPADS 的 BAR-PVE.sdd 未指向开发源码。' }
+                }
+                $clientItem = Get-Item -LiteralPath $clientLink -Force -ErrorAction SilentlyContinue
+                $clientLinkReady = $null -ne $clientItem -and $clientItem.LinkType -eq 'Junction' -and
+                    [IO.Path]::GetFullPath([string](@($clientItem.Target)[0])).TrimEnd('\') -ieq $source.TrimEnd('\')
+                if ($Action -eq 'Status') {
+                    if ($readiness.ready -and -not $clientLinkReady) {
+                        $readiness = [pscustomobject]@{ ready = $false; reason = '客户端 BAR-PVE.sdd 未指向开发源码。' }
+                    }
+                    $active = if ($clientLinkReady) { $devServer } else { $null }
+                    [pscustomobject]@{
+                        server = $devServer
+                        ready = $readiness.ready
+                        reason = $readiness.reason
+                        active = $active
+                        history = @()
+                    } | ConvertTo-Json -Depth 8 -Compress
+                    exit 0
+                }
+                Assert-BarClientStopped -DataDirectory $data
+                if (-not $readiness.ready) { throw $readiness.reason }
+                $null = Assert-Engine $data $DevEngineVersion 'spring.exe'
+                Ensure-Junction $clientLink $source
+                [pscustomobject]@{ mode = 'pve-development'; active = $devServer; gameFile = $clientLink } |
+                    ConvertTo-Json -Depth 5 -Compress
+                exit 0
+            }
+        }
+    }
+}
 if ($Action -eq 'Status') {
     $server = Read-ServerStatus
     $readiness = Get-LocalServerReadiness $server

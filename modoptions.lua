@@ -712,6 +712,107 @@ local options = {
 	-- Raptors
 	---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	{
+		key = "pve_spawn_limits",
+		name = "PVE Spawn Limits",
+		desc = "Limit enemy wave size and smooth out unit creation in Raptors and Scavengers games.",
+		type = "bool",
+		def = true,
+		section = "options_main",
+	},
+	{
+		key = "pve_enemy_unit_cap",
+		name = "PVE Enemy Unit Cap",
+		desc = "Maximum active enemy combat units at 16 players; structures and bosses have separate caps.",
+		type = "number",
+		def = 960,
+		min = 100,
+		max = 5000,
+		step = 20,
+		section = "options_main",
+	},
+	{
+		key = "pve_spawn_queue_cap",
+		name = "PVE Spawn Queue Cap",
+		desc = "Maximum pending units in a defense wave; excess requests are discarded.",
+		type = "number",
+		def = 128,
+		min = 16,
+		max = 1024,
+		step = 16,
+		section = "options_main",
+	},
+	{
+		key = "pve_spawn_interval",
+		name = "PVE Spawn Interval",
+		desc = "Frames between enemy spawn batches when PVE spawn limits are enabled.",
+		type = "number",
+		def = 15,
+		min = 5,
+		max = 60,
+		step = 1,
+		section = "options_main",
+	},
+	{
+		key = "pve_spawn_per_call",
+		name = "PVE Spawn Per Call",
+		desc = "Maximum units created each time the defense spawner runs.",
+		type = "number",
+		def = 4,
+		min = 1,
+		max = 64,
+		step = 1,
+		section = "options_main",
+	},
+	{
+		key = "pve_structure_cap",
+		name = "PVE Structure Cap",
+		desc = "Maximum enemy structures in Raptors and Scavengers games.",
+		type = "number",
+		def = 120,
+		min = 10,
+		max = 1000,
+		step = 10,
+		section = "options_main",
+	},
+	{
+		key = "pve_boss_cap",
+		name = "PVE Boss Cap",
+		desc = "Maximum active final bosses in Raptors and Scavengers games.",
+		type = "number",
+		def = 2,
+		min = 1,
+		max = 16,
+		step = 1,
+		section = "options_main",
+	},
+	{
+		key = "pve_combat_budget_mult",
+		name = "PVE Combat Budget Multiplier",
+		desc = "Weighted combat budget relative to the player-scaled enemy unit cap.",
+		type = "number",
+		def = 2,
+		min = 1,
+		max = 8,
+		step = 0.5,
+		section = "options_main",
+	},
+	{
+		key = "pve_ai_stagger",
+		name = "PVE Squad AI Stagger",
+		desc = "Spread nonurgent squad target refresh checks across simulation frames.",
+		type = "bool",
+		def = true,
+		section = "options_main",
+	},
+	{
+		key = "pve_population_cache",
+		name = "PVE Population Cache",
+		desc = "Reuse enemy type counts during each periodic minion pass.",
+		type = "bool",
+		def = true,
+		section = "options_main",
+	},
 	-- NOTE: update language/en/interface.json when you change name or desc
 	{
 		key = "raptor_defense_options",
@@ -1821,7 +1922,7 @@ local options = {
 
 	---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	-- Experimental Options
+-- Experimental Options
 	---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2132,6 +2233,30 @@ local options = {
 		desc = "tab that should be hidden by chobby",
 		hidden = true,
 		type = "section",
+	},	-- NOTE: update language/en/interface.json when you change name or desc
+	{
+		key = "roguelike_mode",
+		name = "Roguelike Survival (Dev)",
+		desc = "Enable the single-commander Roguelike survival mode.",
+		type = "bool",
+		section = "dev",
+		def = false,
+	},
+	{
+		key = "roguelike_coop",
+		name = "Roguelike Coop (2 Players, Dev)",
+		desc = "Use two separate allied player teams with shared waves and individual upgrades. Requires Roguelike Survival.",
+		type = "bool",
+		section = "dev",
+		def = false,
+	},
+	{
+		key = "roguelike_weapon_effect_tests",
+		name = "Roguelike Weapon Effect Prototype Tests",
+		desc = "Adds the Meteor Strike ground-target test command to non-ARM Roguelike commanders; does not add a test weapon to ARM.",
+		type = "bool",
+		section = "dev",
+		def = false,
 	},
 	-- NOTE: update language/en/interface.json when you change name or desc
 	{

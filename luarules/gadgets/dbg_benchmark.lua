@@ -480,13 +480,12 @@ else -- UNSYNCED
 	function gadget:Update() -- START OF UPDATE
 		if benchmarkactive then
 			local now = Spring.GetTimerMicros()
-			if lastFrameType == "draw" then
-				-- We are doing a double draw
-			else
+			if lastFrameType == "sim" then
 				-- We are ending a sim frame, so better push the sim frame time number
 				simTime = Spring.DiffTimers(now, lastSimTimerUS)
 				benchmarkstats.simFrameTimes[#benchmarkstats.simFrameTimes + 1] = simTime
 				ss = alpha * ss + (1 - alpha) * simTime
+				lastFrameType = "update"
 			end
 			lastUpdateTimerUs = Spring.GetTimerMicros()
 		end
@@ -576,6 +575,22 @@ else -- UNSYNCED
 				benchmarkstats.numunitsdestroyed
 			)
 			Spring.Echo(s1)
+			for _, prefix in ipairs({ "pveRaptor", "pveScav" }) do
+				local combat = Spring.GetGameRulesParam(prefix .. "CombatCount")
+				if combat then
+					Spring.Echo(string.format(
+						"%s: combat=%d, heavy=%d, structures=%d, bosses=%d, queue=%d, free=%d, weight=%d",
+						prefix,
+						combat,
+						Spring.GetGameRulesParam(prefix .. "HeavyCount") or 0,
+						Spring.GetGameRulesParam(prefix .. "StructureCount") or 0,
+						Spring.GetGameRulesParam(prefix .. "BossCount") or 0,
+						Spring.GetGameRulesParam(prefix .. "SpawnQueueCount") or 0,
+						Spring.GetGameRulesParam(prefix .. "AvailableSpawns") or 0,
+						Spring.GetGameRulesParam(prefix .. "CombatWeight") or 0
+					))
+				end
+			end
 			local res = {}
 			local stats = {}
 			for n, t in pairs({
@@ -602,18 +617,19 @@ else -- UNSYNCED
 					end
 				end
 
-				ms.mean = ms.total / ms.count
-				table.sort(ct)
+				if ms.count > 0 then
+					ms.mean = ms.total / ms.count
+					table.sort(ct)
 
-				for i, v in ipairs(ct) do
-					ms.spread = ms.spread + math.abs(v - ms.mean)
-				end
-				ms.spread = ms.spread / ms.count
+					for i, v in ipairs(ct) do
+						ms.spread = ms.spread + math.abs(v - ms.mean)
+					end
+					ms.spread = ms.spread / ms.count
+					ms.buckets = buildExpHistogram(ct, 20)
 
-				ms.buckets = buildExpHistogram(ct, 20)
-
-				for _, i in ipairs({ 0, 1, 2, 5, 10, 20, 35, 50, 65, 80, 90, 95, 98, 99, 100 }) do
-					ms.percentiles[i] = ct[math.min(#ct, 1 + math.floor(i * 0.01 * #ct))]
+					for _, i in ipairs({ 0, 1, 2, 5, 10, 20, 35, 50, 65, 80, 90, 95, 98, 99, 100 }) do
+						ms.percentiles[i] = ct[math.min(#ct, 1 + math.floor(i * 0.01 * #ct))]
+					end
 				end
 
 				stats[n] = ms
@@ -623,8 +639,13 @@ else -- UNSYNCED
 					total = total + v
 				end
 
-				local s2 =
-					string.format("%s %d frames, %3.2fms per frame, %4.2fs total", n, ms.count, ms.mean, ms.total)
+				local s2 = string.format(
+					"%s %d frames, %3.2fms per frame, %4.2fs total",
+					n,
+					ms.count,
+					ms.mean,
+					ms.total / 1000
+				)
 				res[#res + 1] = s2
 				Spring.Echo(s2)
 			end

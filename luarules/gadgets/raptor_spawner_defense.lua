@@ -1,4 +1,6 @@
-if BAR.Utilities.Gametype.IsRaptors() and not BAR.Utilities.Gametype.IsScavengers() then
+local rogueOption = Spring.GetModOptions().roguelike_mode
+local rogueEnabled = rogueOption == true or rogueOption == 1 or rogueOption == "1" or rogueOption == "true"
+if not rogueEnabled and BAR.Utilities.Gametype.IsRaptors() and not BAR.Utilities.Gametype.IsScavengers() then
 	Spring.Log("Raptor Defense Spawner", LOG.INFO, "Raptor Defense Spawner Activated!")
 else
 	Spring.Log("Raptor Defense Spawner", LOG.INFO, "Raptor Defense Spawner Deactivated!")
@@ -109,7 +111,19 @@ if gadgetHandler:IsSyncedCode() then
 	local nSpawnedQueens = 0
 	local nTotalQueens = modOptions.raptor_queen_count or 1
 	local maxTries = 30
+	local function optionEnabled(value)
+		return value == nil or value == true or value == 1 or value == "1" or value == "true"
+	end
+	local pveSpawnLimits = optionEnabled(modOptions.pve_spawn_limits)
+	local pveAiStagger = optionEnabled(modOptions.pve_ai_stagger)
+	local pvePopulationCache = optionEnabled(modOptions.pve_population_cache)
+	config.pveSpawnLimits = pveSpawnLimits
+	config.pveSpawnInterval =
+		pveSpawnLimits and math.max(5, math.floor(tonumber(modOptions.pve_spawn_interval) or 15)) or 5
 	local raptorUnitCap = math.floor(Game.maxUnits * 0.8)
+	local maxSpawnPerCall = pveSpawnLimits and (tonumber(modOptions.pve_spawn_per_call) or 4) or math.huge
+	local maxSpawnQueue = pveSpawnLimits and (tonumber(modOptions.pve_spawn_queue_cap) or 128) or math.huge
+	Spring.Log("Raptor Defense Spawner", LOG.INFO, "PVE spawn limits enabled: " .. tostring(pveSpawnLimits))
 	local minBurrows = 1
 	local timeOfLastSpawn = -999999
 	local timeOfLastWave = 0
@@ -161,7 +175,48 @@ if gadgetHandler:IsSyncedCode() then
 	local spawnAreaMultiplier = 2
 	local gameOver = nil
 	local humanTeams = {}
+	local raptorTeamID = BAR.Utilities.GetRaptorTeamID()
+	local SpawnBudget = require("luarules/Utilities/pve_spawn_budget")
+	local spawnBudget = pveSpawnLimits and SpawnBudget.New(
+		raptorTeamID,
+		SpawnBudget.PlayerScaledCaps(
+			raptorTeamID,
+			math.min(
+				tonumber(modOptions.pve_enemy_unit_cap) or 960,
+				math.max(
+					0,
+					raptorUnitCap - (tonumber(modOptions.pve_structure_cap) or 120) - (tonumber(modOptions.pve_boss_cap) or 2)
+				)
+			),
+			tonumber(modOptions.pve_structure_cap) or 120,
+			tonumber(modOptions.pve_boss_cap) or 2,
+			tonumber(modOptions.pve_combat_budget_mult) or 2,
+			raptorUnitCap
+		)
+	)
 	local spawnQueue = {}
+	local spawnQueueCount = 0
+	local function QueueRaptorSpawn(spawn)
+		if spawnQueueCount >= maxSpawnQueue
+			or (spawnBudget and spawnBudget.GetTotalActive() + spawnQueueCount >= raptorUnitCap) then
+			return false
+		end
+		if spawnBudget and not spawnBudget.Reserve(spawn) then
+			return false
+		end
+		spawnQueueCount = spawnQueueCount + 1
+		table.insert(spawnQueue, spawn)
+		return true
+	end
+	local function RemoveQueuedRaptorSpawn(index)
+		if spawnQueue[index] then
+			if spawnBudget then
+				spawnBudget.Release(spawnQueue[index])
+			end
+			table.remove(spawnQueue, index)
+			spawnQueueCount = spawnQueueCount - 1
+		end
+	end
 	local deathQueue = {}
 	local queenResistance = {}
 	local queenStagger = {
@@ -173,7 +228,6 @@ if gadgetHandler:IsSyncedCode() then
 	}
 	local queenIDs = {}
 	local bosses = { resistances = queenResistance, statuses = {}, playerDamages = {} }
-	local raptorTeamID = BAR.Utilities.GetRaptorTeamID()
 	local raptorAllyTeamID = BAR.Utilities.GetRaptorAllyTeamID()
 	local lsx1, lsz1, lsx2, lsz2 = 0, 0, Game.mapSizeX, Game.mapSizeZ
 	local burrows = {}
@@ -220,11 +274,13 @@ if gadgetHandler:IsSyncedCode() then
 	-- Teams
 	--------------------------------------------------------------------------------
 
-	local teams = GetTeamList()
-	for _, teamID in ipairs(teams) do
-		local teamLuaAI = GetTeamLuaAI(teamID)
-		if teamID ~= raptorTeamID then
-			humanTeams[teamID] = true
+	if pveSpawnLimits then
+		humanTeams = SpawnBudget.GetHumanTeams(raptorTeamID)
+	else
+		for _, teamID in ipairs(GetTeamList()) do
+			if teamID ~= raptorTeamID then
+				humanTeams[teamID] = true
+			end
 		end
 	end
 
@@ -707,9 +763,18 @@ if gadgetHandler:IsSyncedCode() then
 	end
 
 	function manageAllSquads() -- Get new target for all squads that need it
-		for i = 1, #squadsTable do
-			if mRandom(1, 100) == 1 and unitTargetPool[i] == nil then
-				refreshSquad(i)
+		if pveAiStagger then
+			local stride = 3
+			for i = (GetGameFrame % stride) + 1, #squadsTable, stride do
+				if unitTargetPool[i] == nil and mRandom(1, 100) <= stride then
+					refreshSquad(i)
+				end
+			end
+		else
+			for i = 1, #squadsTable do
+				if mRandom(1, 100) == 1 and unitTargetPool[i] == nil then
+					refreshSquad(i)
+				end
 			end
 		end
 	end
@@ -761,10 +826,7 @@ if gadgetHandler:IsSyncedCode() then
 				for j = 1, count, 1 do
 					if mRandom() <= config.spawnChance or j == 1 then
 						squadCounter = squadCounter + 1
-						table.insert(
-							spawnQueue,
-							{ burrow = burrowID, unitName = raptorType, team = raptorTeamID, squadID = squadCounter }
-						)
+						QueueRaptorSpawn({ burrow = burrowID, unitName = raptorType, team = raptorTeamID, squadID = squadCounter })
 					end
 				end
 			elseif not UnitDefNames[raptorType] then
@@ -806,7 +868,7 @@ if gadgetHandler:IsSyncedCode() then
 						for j = 1, unitNumber, 1 do
 							if mRandom() <= config.spawnChance or j == 1 then
 								squadCounter = squadCounter + 1
-								table.insert(spawnQueue, {
+										QueueRaptorSpawn({
 									burrow = burrowID,
 									unitName = raptorName,
 									team = raptorTeamID,
@@ -1444,7 +1506,7 @@ if gadgetHandler:IsSyncedCode() then
 								for j = 1, unitNumber, 1 do
 									if mRandom() <= config.spawnChance or j == 1 then
 										squadCounter = squadCounter + 1
-										table.insert(spawnQueue, {
+										QueueRaptorSpawn({
 											burrow = burrowID,
 											unitName = raptorName,
 											team = raptorTeamID,
@@ -1478,7 +1540,7 @@ if gadgetHandler:IsSyncedCode() then
 									for j = 1, unitNumber, 1 do
 										if mRandom() <= config.spawnChance or j == 1 then
 											squadCounter = squadCounter + 1
-											table.insert(spawnQueue, {
+												QueueRaptorSpawn({
 												burrow = burrowID,
 												unitName = raptorName,
 												team = raptorTeamID,
@@ -1498,8 +1560,13 @@ if gadgetHandler:IsSyncedCode() then
 				end
 			end
 		until cCount > currentMaxWaveSize * waveParameters.waveSizeMultiplier
+			or (pveSpawnLimits and (spawnQueueCount >= maxSpawnQueue
+				or spawnBudget.GetTotalActive() + spawnQueueCount >= raptorUnitCap))
 			or loopCounter >= 200 * config.raptorSpawnMultiplier
 
+		if pveSpawnLimits then
+			cCount = spawnQueueCount
+		end
 		if config.useWaveMsg then
 			raptorEvent("wave", cCount)
 		end
@@ -1694,8 +1761,17 @@ if gadgetHandler:IsSyncedCode() then
 	--------------------------------------------------------------------------------
 	-- Call-ins
 	--------------------------------------------------------------------------------
+	function gadget:AllowUnitCreation(unitDefID, _, teamID)
+		if spawnBudget and teamID == raptorTeamID then
+			return spawnBudget.CanCreate(unitDefID)
+		end
+		return true
+	end
 
 	function gadget:UnitCreated(unitID, unitDefID, unitTeam)
+		if spawnBudget then
+			spawnBudget.UnitCreated(unitID, unitDefID, unitTeam)
+		end
 		local unitDef = UnitDefs[unitDefID]
 
 		if unitTeam == raptorTeamID then
@@ -2150,9 +2226,10 @@ if gadgetHandler:IsSyncedCode() then
 
 	local function SpawnRaptors()
 		local squadDone = false
+		local spawnedThisCall = 0
 		repeat
-			local i, defs = next(spawnQueue)
-			if not i or not defs then
+			local i, defs = 1, spawnQueue[1]
+			if not defs then
 				if #squadCreationQueue.units > 0 then
 					if mRandom(1, 5) == 1 then
 						squadCreationQueue.regroupenabled = false
@@ -2167,12 +2244,20 @@ if gadgetHandler:IsSyncedCode() then
 				end
 				return
 			end
-			local x, y, z = getRaptorSpawnLoc(defs.burrow, config.raptorBehaviours.PROBE_UNIT)
-			if not x or not y or not z then
-				spawnQueue[i] = nil
+			if spawnedThisCall >= maxSpawnPerCall
+				or (pveSpawnLimits and (GetTeamUnitCount(raptorTeamID) or 0) >= raptorUnitCap) then
 				return
 			end
+			local x, y, z = getRaptorSpawnLoc(defs.burrow, config.raptorBehaviours.PROBE_UNIT)
+			if not x or not y or not z then
+				RemoveQueuedRaptorSpawn(i)
+				return
+			end
+			if spawnBudget then
+				spawnBudget.ConsumeReservation(defs)
+			end
 			local unitID = CreateUnit(defs.unitName, x, y, z, mRandom(0, 3), defs.team)
+			spawnedThisCall = spawnedThisCall + 1
 
 			if unitID then
 				if (not defs.squadID) or (defs.squadID and defs.squadID == 1) then
@@ -2219,7 +2304,7 @@ if gadgetHandler:IsSyncedCode() then
 
 				setRaptorXP(unitID)
 			end
-			spawnQueue[i] = nil
+			RemoveQueuedRaptorSpawn(i)
 		until squadDone == true
 	end
 
@@ -2238,6 +2323,10 @@ if gadgetHandler:IsSyncedCode() then
 				queenSquad.units = { queenID }
 				createSquad(queenSquad)
 				spawnQueue = {}
+				spawnQueueCount = 0
+				if spawnBudget then
+					spawnBudget.ClearReservations()
+				end
 				raptorEvent("queen") -- notify unsynced about queen spawn
 				local _, queenMaxHP = GetUnitHealth(queenID)
 				SetUnitHealth(queenID, math.max(queenMaxHP * (techAnger * 0.01), queenMaxHP * 0.2))
@@ -2405,7 +2494,10 @@ if gadgetHandler:IsSyncedCode() then
 		end
 
 		local raptorTeamUnitCount = GetTeamUnitCount(raptorTeamID) or 0
-		if raptorTeamUnitCount < raptorUnitCap and (n % 5 == 4 or waveParameters.firstWavesBoost > 1) then
+		if
+			raptorTeamUnitCount < raptorUnitCap
+			and (n % config.pveSpawnInterval == 4 or (not config.pveSpawnLimits and waveParameters.firstWavesBoost > 1))
+		then
 			tracy.ZoneBeginN("Raptors:SpawnRaptors")
 			SpawnRaptors()
 			tracy.ZoneEnd()
@@ -2418,6 +2510,9 @@ if gadgetHandler:IsSyncedCode() then
 		end
 
 		if n % 30 == 16 then
+			if spawnBudget then
+				spawnBudget.Publish("pveRaptor", spawnQueueCount)
+			end
 			t = GetGameSeconds
 			local burrowCount = SetCount(burrows)
 			playerAggression = playerAggression * 0.995
@@ -2532,6 +2627,7 @@ if gadgetHandler:IsSyncedCode() then
 		end
 		if n % 7 == 3 then
 			local raptors = GetTeamUnits(raptorTeamID)
+			local populationCounts = pvePopulationCache and #raptors >= 100 and {} or nil
 			for i = 1, #raptors do
 				local unitID = raptors[i]
 				local defID
@@ -2539,12 +2635,17 @@ if gadgetHandler:IsSyncedCode() then
 				-- 1/33 * 1/count keeps the old 1/(33*count) odds
 				if mRandom(1, 33) == 1 then
 					defID = GetUnitDefID(unitID)
-					if
-						defID
-						and mRandom(1, math.max(1, GetTeamUnitDefCount(raptorTeamID, defID))) == 1
-						and mRandom() < config.spawnChance
-					then
-						SpawnMinions(unitID, defID)
+					if defID then
+						local population = populationCounts and populationCounts[defID]
+						if not population then
+							population = math.max(1, GetTeamUnitDefCount(raptorTeamID, defID))
+							if populationCounts then
+								populationCounts[defID] = population
+							end
+						end
+						if mRandom(1, population) == 1 and mRandom() < config.spawnChance then
+							SpawnMinions(unitID, defID)
+						end
 					end
 				end
 				if math.random(1, 10) == 1 and unitCowardCooldown[unitID] and (n > unitCowardCooldown[unitID]) then
@@ -2579,6 +2680,9 @@ if gadgetHandler:IsSyncedCode() then
 	end
 
 	function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID)
+		if spawnBudget then
+			spawnBudget.UnitDestroyed(unitID)
+		end
 		if unitTeam == raptorTeamID then
 			if config.useEggs then
 				local x, y, z = GetUnitPosition(unitID)
@@ -2643,6 +2747,10 @@ if gadgetHandler:IsSyncedCode() then
 					SetGameRulesParam("raptorQueenHealth", 0)
 					SetGameRulesParam("raptorTechAnger", 0)
 					spawnQueue = {}
+					spawnQueueCount = 0
+					if spawnBudget then
+						spawnBudget.ClearReservations()
+					end
 
 					if not killedRaptorsAllyTeam then
 						killedRaptorsAllyTeam = true
@@ -2682,9 +2790,10 @@ if gadgetHandler:IsSyncedCode() then
 				config.maxXP = config.maxXP * 1.01
 			end
 
-			for i, defs in pairs(spawnQueue) do
+			for i = spawnQueueCount, 1, -1 do
+				local defs = spawnQueue[i]
 				if defs.burrow == unitID then
-					spawnQueue[i] = nil
+					RemoveQueuedRaptorSpawn(i)
 				end
 			end
 
@@ -2705,6 +2814,12 @@ if gadgetHandler:IsSyncedCode() then
 		if unitTeam ~= raptorTeamID and config.ecoBuildingsPenalty[unitDefID] then
 			playerAggressionEcoValue = playerAggressionEcoValue
 				- (config.ecoBuildingsPenalty[unitDefID] / (config.queenTime / 3600)) -- scale to 60minutes = 3600seconds queen time
+		end
+	end
+
+	function gadget:UnitGiven(unitID, unitDefID, newTeam, oldTeam)
+		if spawnBudget then
+			spawnBudget.UnitGiven(unitID, unitDefID, newTeam, oldTeam)
 		end
 	end
 

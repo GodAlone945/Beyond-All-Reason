@@ -3608,6 +3608,46 @@
 			"name": "Raptors",
 			"desc": "Various gameplay options that will change how the Raptor Defense is played."
 		},
+		"pve_spawn_limits": {
+			"name": "PVE Spawn Limits",
+			"desc": "Limit enemy wave size and smooth out unit creation in Raptors and Scavengers games."
+		},
+		"pve_enemy_unit_cap": {
+			"name": "PVE Enemy Unit Cap",
+			"desc": "Maximum active enemy combat units at 16 players; structures and bosses have separate caps."
+		},
+		"pve_spawn_queue_cap": {
+			"name": "PVE Spawn Queue Cap",
+			"desc": "Maximum pending units in a defense wave; excess requests are discarded."
+		},
+		"pve_spawn_interval": {
+			"name": "PVE Spawn Interval",
+			"desc": "Frames between enemy spawn batches when PVE spawn limits are enabled."
+		},
+		"pve_spawn_per_call": {
+			"name": "PVE Spawn Per Call",
+			"desc": "Maximum units created each time the defense spawner runs."
+		},
+		"pve_structure_cap": {
+			"name": "PVE Structure Cap",
+			"desc": "Maximum enemy structures in Raptors and Scavengers games."
+		},
+		"pve_boss_cap": {
+			"name": "PVE Boss Cap",
+			"desc": "Maximum active final bosses in Raptors and Scavengers games."
+		},
+		"pve_combat_budget_mult": {
+			"name": "PVE Combat Budget Multiplier",
+			"desc": "Weighted combat budget relative to the player-scaled enemy unit cap."
+		},
+		"pve_ai_stagger": {
+			"name": "PVE Squad AI Stagger",
+			"desc": "Spread nonurgent squad target refresh checks across simulation frames."
+		},
+		"pve_population_cache": {
+			"name": "PVE Population Cache",
+			"desc": "Reuse enemy type counts during each periodic minion pass."
+		},
 		"raptors_dev_channel_link": {
 			"name": "Development Discussion",
 			"desc": "Raptors development discussion."
@@ -4061,6 +4101,18 @@
 		},
 		"commanderbuildersbuildpower": {
 			"name": "Base Builder Turret: Buildpower"
+		},
+		"roguelike_mode": {
+			"name": "Roguelike Survival",
+			"desc": "Enable Roguelike survival mode (development option)."
+		},
+		"roguelike_coop": {
+			"name": "Roguelike Coop (2 Players)",
+			"desc": "Two allied player teams share waves and kills while keeping individual commanders, resources, shops and upgrades. Requires Roguelike Survival."
+		},
+		"roguelike_weapon_effect_tests": {
+			"name": "Roguelike Weapon Effect Prototype Tests",
+			"desc": "Adds the Meteor Strike ground-target test command to non-ARM Roguelike commanders; does not add a test weapon to ARM."
 		},
 		"zombies": {
 			"name": "Scavenger Zombies",

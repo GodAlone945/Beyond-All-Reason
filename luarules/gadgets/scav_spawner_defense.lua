@@ -12,7 +12,9 @@ function gadget:GetInfo()
 	}
 end
 
-if BAR.Utilities.Gametype.IsScavengers() and not BAR.Utilities.Gametype.IsRaptors() then
+local rogueOption = Spring.GetModOptions().roguelike_mode
+local rogueEnabled = rogueOption == true or rogueOption == 1 or rogueOption == "1" or rogueOption == "true"
+if not rogueEnabled and BAR.Utilities.Gametype.IsScavengers() and not BAR.Utilities.Gametype.IsRaptors() then
 	Spring.Log(gadget:GetInfo().name, LOG.INFO, "Scav Defense Spawner Activated!")
 else
 	Spring.Log(gadget:GetInfo().name, LOG.INFO, "Scav Defense Spawner Deactivated!")
@@ -84,7 +86,19 @@ if gadgetHandler:IsSyncedCode() then
 	local nSpawnedBosses = 0
 	local nTotalBosses = modOptions.scav_boss_count or 1
 	local maxTries = 30
+	local function optionEnabled(value)
+		return value == nil or value == true or value == 1 or value == "1" or value == "true"
+	end
+	local pveSpawnLimits = optionEnabled(modOptions.pve_spawn_limits)
+	local pveAiStagger = optionEnabled(modOptions.pve_ai_stagger)
+	local pvePopulationCache = optionEnabled(modOptions.pve_population_cache)
+	config.pvePopulationCache = pvePopulationCache
+	config.pveSpawnInterval =
+		pveSpawnLimits and math.max(5, math.floor(tonumber(modOptions.pve_spawn_interval) or 15)) or 5
 	local scavUnitCap = math.floor(Game.maxUnits * 0.80)
+	local maxSpawnPerCall = pveSpawnLimits and (tonumber(modOptions.pve_spawn_per_call) or 4) or math.huge
+	local maxSpawnQueue = pveSpawnLimits and (tonumber(modOptions.pve_spawn_queue_cap) or 128) or math.huge
+	Spring.Log("Scavenger Defense Spawner", LOG.INFO, "PVE spawn limits enabled: " .. tostring(pveSpawnLimits))
 	local minBurrows = 1
 	local timeOfLastSpawn = -999999
 	local timeOfLastWave = 0
@@ -154,7 +168,54 @@ if gadgetHandler:IsSyncedCode() then
 	local spawnAreaMultiplier = 2
 	local gameOver = nil
 	local humanTeams = {}
+	local scavTeamID = BAR.Utilities.GetScavTeamID()
+	local SpawnBudget = require("luarules/Utilities/pve_spawn_budget")
+	local spawnBudget = pveSpawnLimits and SpawnBudget.New(
+		scavTeamID,
+		SpawnBudget.PlayerScaledCaps(
+			scavTeamID,
+			math.min(
+				tonumber(modOptions.pve_enemy_unit_cap) or 960,
+				math.max(
+					0,
+					scavUnitCap - (tonumber(modOptions.pve_structure_cap) or 120) - (tonumber(modOptions.pve_boss_cap) or 2)
+				)
+			),
+			tonumber(modOptions.pve_structure_cap) or 120,
+			tonumber(modOptions.pve_boss_cap) or 2,
+			tonumber(modOptions.pve_combat_budget_mult) or 2,
+			scavUnitCap
+		)
+	)
 	local spawnQueue = {}
+	local spawnQueueCount = 0
+	local conversionQueueCount = 0
+	local function QueueScavSpawn(spawn)
+		if spawnQueueCount + conversionQueueCount >= maxSpawnQueue
+			or (spawnBudget and spawnBudget.GetTotalActive() + spawnQueueCount + conversionQueueCount >= scavUnitCap) then
+			return false
+		end
+		if spawnBudget and not spawnBudget.Reserve(spawn) then
+			return false
+		end
+		spawnQueueCount = spawnQueueCount + 1
+		table.insert(spawnQueue, spawn)
+		return true
+	end
+	local function RemoveQueuedScavSpawn(index)
+		if spawnQueue[index] then
+			if spawnBudget then
+				spawnBudget.Release(spawnQueue[index])
+			end
+			table.remove(spawnQueue, index)
+			spawnQueueCount = spawnQueueCount - 1
+		end
+	end
+	local function PublishBudgetStats()
+		if spawnBudget then
+			spawnBudget.Publish("pveScav", spawnQueueCount + conversionQueueCount)
+		end
+	end
 	local deathQueue = {}
 	local bossResistance = {}
 	local bossStagger = {
@@ -166,7 +227,6 @@ if gadgetHandler:IsSyncedCode() then
 	}
 	local bossIDs = {}
 	local bosses = { resistances = bossResistance, statuses = {}, playerDamages = {} }
-	local scavTeamID = BAR.Utilities.GetScavTeamID()
 	local scavAllyTeamID = BAR.Utilities.GetScavAllyTeamID()
 	local lsx1, lsz1, lsx2, lsz2
 	local burrows = {}
@@ -230,10 +290,13 @@ if gadgetHandler:IsSyncedCode() then
 	-- Teams
 	--------------------------------------------------------------------------------
 
-	local teams = GetTeamList()
-	for _, teamID in ipairs(teams) do
-		if teamID ~= scavTeamID then
-			humanTeams[teamID] = true
+	if pveSpawnLimits then
+		humanTeams = SpawnBudget.GetHumanTeams(scavTeamID)
+	else
+		for _, teamID in ipairs(GetTeamList()) do
+			if teamID ~= scavTeamID then
+				humanTeams[teamID] = true
+			end
 		end
 	end
 
@@ -751,9 +814,18 @@ if gadgetHandler:IsSyncedCode() then
 	end
 
 	function manageAllSquads() -- Get new target for all squads that need it
-		for i = 1, #squadsTable do
-			if mRandom(1, 100) == 1 and unitTargetPool[i] == nil then
-				refreshSquad(i)
+		if pveAiStagger then
+			local stride = 3
+			for i = (GetGameFrame % stride) + 1, #squadsTable, stride do
+				if unitTargetPool[i] == nil and mRandom(1, 100) <= stride then
+					refreshSquad(i)
+				end
+			end
+		else
+			for i = 1, #squadsTable do
+				if mRandom(1, 100) == 1 and unitTargetPool[i] == nil then
+					refreshSquad(i)
+				end
 			end
 		end
 	end
@@ -822,10 +894,7 @@ if gadgetHandler:IsSyncedCode() then
 				for j = 1, count, 1 do
 					if mRandom() <= config.spawnChance or j == 1 then
 						squadCounter = squadCounter + 1
-						table.insert(
-							spawnQueue,
-							{ burrow = burrowID, unitName = scavType, team = scavTeamID, squadID = squadCounter }
-						)
+						QueueScavSpawn({ burrow = burrowID, unitName = scavType, team = scavTeamID, squadID = squadCounter })
 					end
 				end
 			elseif not UnitDefNames[scavType] then
@@ -937,7 +1006,7 @@ if gadgetHandler:IsSyncedCode() then
 						for j = 1, unitNumber, 1 do
 							if mRandom() <= config.spawnChance or j == 1 then
 								squadCounter = squadCounter + 1
-								table.insert(spawnQueue, {
+								QueueScavSpawn({
 									burrow = burrowID,
 									unitName = scavName,
 									team = scavTeamID,
@@ -980,7 +1049,7 @@ if gadgetHandler:IsSyncedCode() then
 							for j = 1, unitNumber, 1 do
 								if mRandom() <= config.spawnChance or j == 1 then
 									squadCounter = squadCounter + 1
-									table.insert(spawnQueue, {
+									QueueScavSpawn({
 										burrow = burrowID,
 										unitName = scavName,
 										team = scavTeamID,
@@ -1010,7 +1079,7 @@ if gadgetHandler:IsSyncedCode() then
 					then
 						waveParameters.commanders.waveCommanders[name] = true
 						waveParameters.commanders.waveCommanderCount = waveParameters.commanders.waveCommanderCount + 1
-						table.insert(spawnQueue, { burrow = burrowID, unitName = name, team = scavTeamID, squadID = 1 })
+						QueueScavSpawn({ burrow = burrowID, unitName = name, team = scavTeamID, squadID = 1 })
 						break
 					end
 				end
@@ -1029,7 +1098,7 @@ if gadgetHandler:IsSyncedCode() then
 						waveParameters.commanders.waveDecoyCommanders[name] = true
 						waveParameters.commanders.waveDecoyCommanderCount = waveParameters.commanders.waveDecoyCommanderCount
 							+ 1
-						table.insert(spawnQueue, { burrow = burrowID, unitName = name, team = scavTeamID, squadID = 1 })
+						QueueScavSpawn({ burrow = burrowID, unitName = name, team = scavTeamID, squadID = 1 })
 						break
 					end
 				end
@@ -1800,7 +1869,7 @@ if gadgetHandler:IsSyncedCode() then
 								for j = 1, unitNumber, 1 do
 									if mRandom() <= config.spawnChance or j == 1 then
 										squadCounter = squadCounter + 1
-										table.insert(spawnQueue, {
+										QueueScavSpawn({
 											burrow = burrowID,
 											unitName = scavName,
 											team = scavTeamID,
@@ -1844,7 +1913,7 @@ if gadgetHandler:IsSyncedCode() then
 									for j = 1, unitNumber, 1 do
 										if mRandom() <= config.spawnChance or j == 1 then
 											squadCounter = squadCounter + 1
-											table.insert(spawnQueue, {
+											QueueScavSpawn({
 												burrow = burrowID,
 												unitName = scavName,
 												team = scavTeamID,
@@ -1876,10 +1945,7 @@ if gadgetHandler:IsSyncedCode() then
 								waveParameters.commanders.waveCommanders[name] = true
 								waveParameters.commanders.waveCommanderCount = waveParameters.commanders.waveCommanderCount
 									+ 1
-								table.insert(
-									spawnQueue,
-									{ burrow = burrowID, unitName = name, team = scavTeamID, squadID = 1 }
-								)
+								QueueScavSpawn({ burrow = burrowID, unitName = name, team = scavTeamID, squadID = 1 })
 								cCount = cCount + 1
 								break
 							end
@@ -1900,10 +1966,7 @@ if gadgetHandler:IsSyncedCode() then
 								waveParameters.commanders.waveDecoyCommanders[name] = true
 								waveParameters.commanders.waveDecoyCommanderCount = waveParameters.commanders.waveDecoyCommanderCount
 									+ 1
-								table.insert(
-									spawnQueue,
-									{ burrow = burrowID, unitName = name, team = scavTeamID, squadID = 1 }
-								)
+								QueueScavSpawn({ burrow = burrowID, unitName = name, team = scavTeamID, squadID = 1 })
 								cCount = cCount + 1
 								break
 							end
@@ -1929,8 +1992,13 @@ if gadgetHandler:IsSyncedCode() then
 				end
 			end
 		until cCount > currentMaxWaveSize * waveParameters.waveSizeMultiplier
+			or (pveSpawnLimits and (spawnQueueCount + conversionQueueCount >= maxSpawnQueue
+				or spawnBudget.GetTotalActive() + spawnQueueCount + conversionQueueCount >= scavUnitCap))
 			or loopCounter >= 200 * config.scavSpawnMultiplier
 
+		if pveSpawnLimits then
+			cCount = spawnQueueCount
+		end
 		if config.useWaveMsg then
 			scavEvent("wave", cCount)
 		end
@@ -2118,7 +2186,41 @@ if gadgetHandler:IsSyncedCode() then
 	-- Call-ins
 	--------------------------------------------------------------------------------
 	local createUnitQueue = {}
+	local function QueueScavConversion(defs)
+		if spawnQueueCount + conversionQueueCount >= maxSpawnQueue then
+			return false
+		end
+		createUnitQueue[#createUnitQueue + 1] = defs
+		conversionQueueCount = conversionQueueCount + 1
+		return true
+	end
+	local function ProcessScavConversionQueue(n)
+		if #createUnitQueue == 0 or (pveSpawnLimits and n % config.pveSpawnInterval ~= 0) then
+			return
+		end
+		local limit = math.min(#createUnitQueue, maxSpawnPerCall)
+		for _ = 1, limit do
+			local defs = createUnitQueue[1]
+			local unitDef = UnitDefNames[defs[1]]
+			if spawnBudget and (not unitDef or not spawnBudget.CanCreate(unitDef.id)) then
+				return
+			end
+			CreateUnit(defs[1], defs[2], defs[3], defs[4], defs[5], defs[6])
+			table.remove(createUnitQueue, 1)
+			conversionQueueCount = conversionQueueCount - 1
+		end
+	end
+	function gadget:AllowUnitCreation(unitDefID, _, teamID)
+		if spawnBudget and teamID == scavTeamID then
+			return spawnBudget.CanCreate(unitDefID)
+		end
+		return true
+	end
+
 	function gadget:UnitCreated(unitID, unitDefID, unitTeam)
+		if spawnBudget then
+			spawnBudget.UnitCreated(unitID, unitDefID, unitTeam)
+		end
 		if unitTeam == scavTeamID then
 			local _, maxH = Spring.GetUnitHealth(unitID)
 			Spring.SetUnitHealth(unitID, maxH)
@@ -2131,30 +2233,32 @@ if gadgetHandler:IsSyncedCode() then
 						and UnitDefs[unitDefID].name
 						and UnitDefNames[UnitDefs[unitDefID].name .. "_scav"]
 					then
-						createUnitQueue[#createUnitQueue + 1] = {
+						if QueueScavConversion({
 							UnitDefs[unitDefID].name .. "_scav",
 							x,
 							y,
 							z,
 							Spring.GetUnitBuildFacing(unitID) or 0,
 							scavTeamID,
-						}
-						DestroyUnit(unitID, true, true)
+						}) then
+							DestroyUnit(unitID, true, true)
+						end
 					end
 				elseif UnitDefs[unitDefID].customParams.scav_swap_override_created == "delete" then
 					Spring.DestroyUnit(unitID, true, true)
 				elseif UnitDefs[unitDefID].customParams.scav_swap_override_created ~= "null" then
 					if UnitDefNames[UnitDefs[unitDefID].customParams.scav_swap_override_created] then
-						createUnitQueue[#createUnitQueue + 1] = {
+						if QueueScavConversion({
 							UnitDefs[unitDefID].customParams.scav_swap_override_created,
 							x,
 							y,
 							z,
 							Spring.GetUnitBuildFacing(unitID) or 0,
 							scavTeamID,
-						}
+						}) then
+							DestroyUnit(unitID, true, true)
+						end
 					end
-					DestroyUnit(unitID, true, true)
 				end
 				return
 			else
@@ -2558,9 +2662,10 @@ if gadgetHandler:IsSyncedCode() then
 
 	function SpawnScavs()
 		local squadDone = false
+		local spawnedThisCall = 0
 		repeat
-			local i, defs = next(spawnQueue)
-			if not i or not defs then
+			local i, defs = 1, spawnQueue[1]
+			if not defs then
 				if #squadCreationQueue.units > 0 then
 					if mRandom(1, 5) == 1 then
 						squadCreationQueue.regroupenabled = false
@@ -2575,6 +2680,10 @@ if gadgetHandler:IsSyncedCode() then
 				end
 				return
 			end
+			if spawnedThisCall >= maxSpawnPerCall
+				or (pveSpawnLimits and (GetTeamUnitCount(scavTeamID) or 0) >= scavUnitCap) then
+				return
+			end
 
 			local unitID
 
@@ -2582,16 +2691,20 @@ if gadgetHandler:IsSyncedCode() then
 			if UnitDefNames[defs.unitName] then
 				x, y, z = getScavSpawnLoc(defs.burrow, UnitDefNames[defs.unitName].id)
 				if not x or not y or not z then
-					spawnQueue[i] = nil
+					RemoveQueuedScavSpawn(i)
 					return
+				end
+				if spawnBudget then
+					spawnBudget.ConsumeReservation(defs)
 				end
 				unitID = CreateUnit(defs.unitName, x, y, z, mRandom(0, 3), defs.team)
 			else
 				--Spring.Echo("Error: Cannot spawn unit " .. defs.unitName .. ", invalid name.")
-				spawnQueue[i] = nil
+				RemoveQueuedScavSpawn(i)
 				return
 			end
 
+			spawnedThisCall = spawnedThisCall + 1
 			if unitID then
 				if (not defs.squadID) or (defs.squadID and defs.squadID == 1) then
 					if #squadCreationQueue.units > 0 then
@@ -2634,7 +2747,7 @@ if gadgetHandler:IsSyncedCode() then
 
 				setScavXP(unitID)
 			end
-			spawnQueue[i] = nil
+			RemoveQueuedScavSpawn(i)
 		until squadDone == true
 	end
 
@@ -2653,6 +2766,10 @@ if gadgetHandler:IsSyncedCode() then
 				bossSquad.units = { bossID }
 				createSquad(bossSquad)
 				spawnQueue = {}
+				spawnQueueCount = 0
+				if spawnBudget then
+					spawnBudget.ClearReservations()
+				end
 				scavEvent("boss") -- notify unsynced about boss spawn
 				local _, bossMaxHP = GetUnitHealth(bossID)
 				Spring.SetUnitHealth(bossID, math.max(bossMaxHP * (techAnger * 0.01), bossMaxHP * 0.2))
@@ -2721,19 +2838,7 @@ if gadgetHandler:IsSyncedCode() then
 		GetGameSeconds = n / 30
 		GetGameFrame = n
 
-		if #createUnitQueue > 0 then
-			for i = 1, #createUnitQueue do
-				CreateUnit(
-					createUnitQueue[i][1],
-					createUnitQueue[i][2],
-					createUnitQueue[i][3],
-					createUnitQueue[i][4],
-					createUnitQueue[i][5],
-					createUnitQueue[i][6]
-				)
-			end
-			createUnitQueue = {}
-		end
+		ProcessScavConversionQueue(n)
 
 		if announcedFirstWave == false and GetGameSeconds > config.gracePeriodInitial then
 			scavEvent("firstWave")
@@ -2753,7 +2858,7 @@ if gadgetHandler:IsSyncedCode() then
 		end
 
 		local scavTeamUnitCount = GetTeamUnitCount(scavTeamID) or 0
-		if scavTeamUnitCount < scavUnitCap and n % 5 == 4 then
+		if scavTeamUnitCount < scavUnitCap and n % config.pveSpawnInterval == 4 then
 			SpawnScavs()
 		end
 
@@ -2764,6 +2869,7 @@ if gadgetHandler:IsSyncedCode() then
 		end
 
 		if n % 30 == 16 then
+			PublishBudgetStats()
 			t = GetGameSeconds
 			local burrowCount = SetCount(burrows)
 			playerAggression = playerAggression * 0.995
@@ -2877,6 +2983,7 @@ if gadgetHandler:IsSyncedCode() then
 		end
 		if n % 7 == 3 then
 			local scavs = GetTeamUnits(scavTeamID)
+			local populationCounts = config.pvePopulationCache and #scavs >= 100 and {} or nil
 			for i = 1, #scavs do
 				local unitID = scavs[i]
 				local defID
@@ -2884,12 +2991,17 @@ if gadgetHandler:IsSyncedCode() then
 				-- 1/33 * 1/count keeps the old 1/(33*count) odds
 				if mRandom(1, 33) == 1 then
 					defID = GetUnitDefID(unitID)
-					if
-						defID
-						and mRandom(1, math.max(1, GetTeamUnitDefCount(scavTeamID, defID))) == 1
-						and mRandom() < config.spawnChance
-					then
-						SpawnMinions(unitID, defID)
+					if defID then
+						local population = populationCounts and populationCounts[defID]
+						if not population then
+							population = math.max(1, GetTeamUnitDefCount(scavTeamID, defID))
+							if populationCounts then
+								populationCounts[defID] = population
+							end
+						end
+						if mRandom(1, population) == 1 and mRandom() < config.spawnChance then
+							SpawnMinions(unitID, defID)
+						end
 					end
 				end
 				if math.random(1, 10) == 1 and unitCowardCooldown[unitID] and (n > unitCowardCooldown[unitID]) then
@@ -3058,6 +3170,9 @@ if gadgetHandler:IsSyncedCode() then
 	end
 
 	function gadget:UnitGiven(unitID, unitDefID, newTeam, oldTeam)
+		if spawnBudget then
+			spawnBudget.UnitGiven(unitID, unitDefID, newTeam, oldTeam)
+		end
 		if oldTeam == scavTeamID then
 			if unitSquadTable[unitID] then
 				for index, id in ipairs(squadsTable[unitSquadTable[unitID]].squadUnits) do
@@ -3089,30 +3204,32 @@ if gadgetHandler:IsSyncedCode() then
 						and UnitDefs[unitDefID].name
 						and UnitDefNames[UnitDefs[unitDefID].name .. "_scav"]
 					then
-						createUnitQueue[#createUnitQueue + 1] = {
+						if QueueScavConversion({
 							UnitDefs[unitDefID].name .. "_scav",
 							x,
 							y,
 							z,
 							GetUnitBuildFacing(unitID) or 0,
 							scavTeamID,
-						}
-						DestroyUnit(unitID, true, true)
+						}) then
+							DestroyUnit(unitID, true, true)
+						end
 					end
 				elseif UnitDefs[unitDefID].customParams.scav_swap_override_captured == "delete" then
 					DestroyUnit(unitID, true, true)
 				elseif UnitDefs[unitDefID].customParams.scav_swap_override_captured ~= "null" then
 					if UnitDefNames[UnitDefs[unitDefID].customParams.scav_swap_override_captured] then
-						createUnitQueue[#createUnitQueue + 1] = {
+						if QueueScavConversion({
 							UnitDefs[unitDefID].customParams.scav_swap_override_captured,
 							x,
 							y,
 							z,
 							GetUnitBuildFacing(unitID) or 0,
 							scavTeamID,
-						}
+						}) then
+							DestroyUnit(unitID, true, true)
+						end
 					end
-					DestroyUnit(unitID, true, true)
 				end
 				return
 			else
@@ -3135,6 +3252,9 @@ if gadgetHandler:IsSyncedCode() then
 	end
 
 	function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID)
+		if spawnBudget then
+			spawnBudget.UnitDestroyed(unitID)
+		end
 		if unitTeam == scavTeamID then
 			if string.find(UnitDefs[unitDefID].name, "scavbeacon") then
 				if mRandom() <= config.spawnChance then
@@ -3205,6 +3325,10 @@ if gadgetHandler:IsSyncedCode() then
 					Spring.SetGameRulesParam("scavBossHealth", 0)
 					Spring.SetGameRulesParam("scavTechAnger", 0)
 					spawnQueue = {}
+					spawnQueueCount = 0
+					if spawnBudget then
+						spawnBudget.ClearReservations()
+					end
 
 					if not killedScavsAllyTeam then
 						killedScavsAllyTeam = true
@@ -3245,9 +3369,10 @@ if gadgetHandler:IsSyncedCode() then
 				config.maxXP = config.maxXP * 1.01
 			end
 
-			for i, defs in pairs(spawnQueue) do
+			for i = spawnQueueCount, 1, -1 do
+				local defs = spawnQueue[i]
 				if defs.burrow == unitID then
-					spawnQueue[i] = nil
+					RemoveQueuedScavSpawn(i)
 				end
 			end
 

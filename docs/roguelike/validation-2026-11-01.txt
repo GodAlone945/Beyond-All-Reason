@@ -1,0 +1,68 @@
+Roguelike audit validation 2026-11-01
+Scope: parser and mocked Spring callbacks; no Recoil match or multiplayer test.
+
+--- Lua 5.1 parser ---
+PASS modoptions.lua
+PASS gamedata/alldefs_post.lua
+PASS modules/customcommands.lua
+PASS luaui/rml_setup.lua
+PASS luaui/Widgets/gui_buildmenu.lua
+PASS luarules/gadgets/game_roguelike_faction_weapons.lua
+PASS luarules/gadgets/game_roguelike_orbit_drones.lua
+PASS luarules/gadgets/game_roguelike_salvage.lua
+PASS luarules/gadgets/game_roguelike_spawner.lua
+PASS luarules/gadgets/game_roguelike_upgrades.lua
+PASS luarules/gadgets/game_roguelike_weapon_effects.lua
+PASS unitbasedefs/roguelike_unit_tweaks.lua
+PASS unitbasedefs/roguelike_weapon_catalog.lua
+PASS unitbasedefs/roguelike_weapon_effects.lua
+PASS weapons/roguelike_meteor_payload.lua
+PASS effects/roguelike_drone_repair.lua
+PASS effects/roguelike_weapon_effects.lua
+PASS features/roguelike_medkit.lua
+PASS units/RoguelikeDrones/arm_electric_drone.lua
+PASS units/RoguelikeDrones/arm_fire_drone.lua
+PASS units/RoguelikeDrones/leg_laser_drone.lua
+PASS luaui/RmlWidgets/gui_roguelike/gui_roguelike.lua
+RESULT 22/22 Lua 5.1 syntax checks passed
+
+--- Before-fix regression baseline (expected failures) ---
+PASS mode off does not install the effect bus
+FAIL native primary projectile survives a full tracking budget: tools/roguelike/Test-WeaponEffects.lua:6: unexpected result: expected 0, got 1
+FAIL two spawn credits create two split children: tools/roguelike/Test-WeaponEffects.lua:6: unexpected result: expected 2, got 1
+FAIL inflight children measure travel from their own origins: tools/roguelike/Test-WeaponEffects.lua:6: unexpected result: expected 6, got 2
+FAIL meteor waits for per-owner capacity without being lost: tools/roguelike/Test-WeaponEffects.lua:6: unexpected result: expected 1, got 0
+FAIL meteor waits for global capacity without being lost: tools/roguelike/Test-WeaponEffects.lua:6: unexpected result: expected 0, got 1
+FAIL failed engine spawn remains queued for retry: tools/roguelike/Test-WeaponEffects.lua:6: unexpected result: expected 1, got 0
+FAIL pending aftershocks do not consume the burn-zone-only cap: tools/roguelike/Test-WeaponEffects.lua:6: unexpected result: expected roguelike-effect-burn_zone, got nil
+FAIL default onHit effect cannot be consumed by an onKill callback: tools/roguelike/Test-WeaponEffects.lua:6: unexpected result: expected 0, got 1
+PASS explicit onKill effect still fires exactly once
+FAIL projectile proc uses base damage rather than already amplified hit: tools/roguelike/Test-WeaponEffects.lua:6: unexpected result: expected 35, got 70.0
+RESULT 2/11 passed (mocked Lua callbacks; not an engine or multiplayer test)
+Baseline exit code: 1
+Baseline Gadget SHA256: 33053D72D24D528ABED6A65FBFBFE880CE3816B3C74BD0CB850DD1528119ECC2
+
+--- Current regression result ---
+PASS mode off does not install the effect bus
+PASS native primary projectile survives a full tracking budget
+PASS two spawn credits create two split children
+PASS inflight children measure travel from their own origins
+PASS meteor waits for per-owner capacity without being lost
+PASS meteor waits for global capacity without being lost
+PASS failed engine spawn remains queued for retry
+PASS pending aftershocks do not consume the burn-zone-only cap
+PASS default onHit effect cannot be consumed by an onKill callback
+PASS explicit onKill effect still fires exactly once
+PASS projectile proc uses base damage rather than already amplified hit
+RESULT 11/11 passed (mocked Lua callbacks; not an engine or multiplayer test)
+Current Gadget SHA256: E4F319238AC95336FF4D09C9ECAE3C939E462F831668A6743E36899A9A5FAD70
+PASS PowerShell syntax: tools/roguelike/Get-RoguelikeAudit.ps1
+PASS PowerShell syntax: tools/pve-launcher/scripts/Invoke-BarPveMode.ps1
+--- Post-audit repairs, 2026-11-01 (source and mocked callbacks only) ---
+Lua 5.1 syntax: 24/24 passed, including Raptor/Scav spawners.
+Weapon effect mock callbacks: 13/13 passed, including BeamLaser without projectile ID and Boss proc target context.
+English/Chinese commands.json: parsed and meteor command/tooltip keys found.
+Launcher: PowerShell scripts parsed; Build.ps1 C# compilation succeeded into .preview.
+Local audit fingerprint: e4c8633a6bb1d67338240195bfbc565c89bb32d7cf33ddd7104e8b1f89615c46 (37 selected files).
+Published server status still differs from local development room.
+No new Recoil match, replay, multiplayer synchronization, UI or performance test was run.

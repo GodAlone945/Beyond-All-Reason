@@ -16,6 +16,9 @@ end
 if gadgetHandler:IsSyncedCode() then
 	local spGetUnitDefID = Spring.GetUnitDefID
 	local stringFind = string.find
+	local roguelikeOption = Spring.GetModOptions().roguelike_mode
+	local roguelikeMode = roguelikeOption == true or roguelikeOption == 1
+		or roguelikeOption == "1" or roguelikeOption == "true"
 
 	local PRIORITY_BOMBERS = 0.1
 	local PRIORITY_VTOLS = 1
@@ -82,7 +85,10 @@ if gadgetHandler:IsSyncedCode() then
 	for unitDefID, unitDef in pairs(UnitDefs) do
 		local weapons = unitDef.weapons
 		if unitDef.isAirUnit then
-			airPriorityMultiplier[unitDefID] = (unitDef.isTransport or unitDef.isBuilder) and PRIORITY_VTOLS
+			local isRoguelikeSuicideThreat = roguelikeMode
+				and unitDef.customParams and unitDef.customParams.roguelike_suicide_threat
+			airPriorityMultiplier[unitDefID] = isRoguelikeSuicideThreat and PRIORITY_FIGHTERS
+				or (unitDef.isTransport or unitDef.isBuilder) and PRIORITY_VTOLS
 				or table.any(weapons, isBomberWeapon) and PRIORITY_BOMBERS
 				or table.any(weapons, isFighterWeapon) and PRIORITY_FIGHTERS
 				or table.any(weapons, isNotFakeWeapon) and PRIORITY_VTOLS -- doubles as the PRIORITY_GUNSHIP

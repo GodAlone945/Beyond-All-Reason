@@ -10,6 +10,8 @@
 		"areaattack_tooltip": "Area attack everything within a circle (click-drag)",
 		"manualfire": "D-Gun",
 		"manualfire_tooltip": "Fire the powerful commander Disintegrator-gun",
+		"roguelike_meteor_strike": "Meteor Strike",
+		"roguelike_meteor_strike_tooltip": "Call meteors down onto a ground target",
 		"manuallaunch": "Launch",
 		"manuallaunch_tooltip": "Launch a missile at a target",
 		"patrol": "Patrol",

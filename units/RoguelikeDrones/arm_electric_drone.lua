@@ -1,0 +1,118 @@
+-- [UnitDef 数据：Armada 电击无人机]
+-- 本文件只定义模型、移动/碰撞基础值和可用武器槽。生成、无敌维持、轨道位置、
+-- 敌人选择、残骸吸收、扣电修复及升级成长均由 game_roguelike_orbit_drones.lua
+-- 在 synced 端执行；不能根据这里的武器命令判断修复是否实际发生。
+
+return {
+    arm_electric_drone = {
+        name                = "Electric Drone",
+        description         = "Orbiting electric drone",
+        maxacc              = 0.5,
+        maxdec              = 0.8,
+        blocking            = false,
+        energycost          = 0,
+        metalcost           = 0,
+        builddistance       = 200,
+        builder             = false,
+        canfly              = true,
+        canmove             = true,
+        collide             = false,
+        cruisealtitude      = 60,
+        explodeas           = "smallexplosiongeneric-builder",
+        footprintx          = 1,
+        footprintz          = 1,
+        health              = 500,
+        maxslope            = 60,
+        speed               = 300.0,
+        maxwaterdepth       = 0,
+        objectname          = "Units/scavboss/LEGASSISTDRONE.s3o",
+        script              = "Units/LEGCA.cob",
+        selfdestructas      = "smallExplosionGenericSelfd",
+        sightdistance       = 800,
+        turninplaceanglelimit = 360,
+        turnrate            = 2400,
+        hoverattack         = true,
+        mass                = 100,
+        collisionVolumeScales  = "1 1 1",
+        collisionVolumeOffsets = "0 20 0",
+        weapons = {
+            { def = "ELECTRIC_DRONE_WEAPON", onlytargetcategory = "SURFACE" },
+            { def = "ELECTRIC_DRONE_HEAL" },
+            { def = "ELECTRIC_DRONE_PARALYZE" },
+        },
+        weaponDefs = {
+            ELECTRIC_DRONE_WEAPON = {
+                name                    = "Drone Lightning Bolt",
+                areaOfEffect            = 32,
+                avoidFriendly           = true,
+                collideFriendly         = false,
+                damage                  = {
+                    default = 70,
+                },
+                explosionGenerator      = "custom:lightning_thing",
+                fireStarter             = 0,
+                impactOnly              = true,
+                interceptedByShieldType = 1,
+                noSelfDamage            = true,
+                range                   = 350,
+                reloadtime              = 0.8,
+                size                    = 2,
+                soundHit                = "weapon/lightning_hit",
+                soundStart              = "weapon/lightning_fire",
+                weaponType              = "LightningCannon",
+                thickness               = 3,
+                coreThickness           = 1,
+                laserFlareSize          = 4,
+                rgba                    = "0.3 0.6 1.0 1.0",  -- 蓝白色
+                customParams = {
+                    spark_count = "3",
+                    spark_range = "200",
+                },
+            },
+            ELECTRIC_DRONE_HEAL = {
+                name                    = "Drone Arc Repair",
+                avoidFriendly           = false,
+                collideFriendly         = true,
+                damage                  = {
+                    default = -25,
+                },
+                range                   = 250,
+                reloadtime              = 1.2,
+                size                    = 2,
+                weaponType              = "BeamLaser",
+                thickness               = 2,
+                coreThickness           = 0.5,
+                laserFlareSize          = 3,
+                rgba                    = "0.3 0.8 1.0 1.0",  -- 亮蓝色
+                noSelfDamage            = true,
+                weaponTimer             = 0.1,
+                customParams = {
+                    is_heal_weapon = "true",
+                },
+            },
+            ELECTRIC_DRONE_PARALYZE = {
+                name                    = "Drone EMP Burst",
+                areaOfEffect            = 120,
+                avoidFriendly           = true,
+                collideFriendly         = false,
+                damage                  = {
+                    default = 0,
+                },
+                paralyzer               = true,
+                paralysisTime           = 4,  -- 电系麻痹更长
+                range                   = 250,
+                reloadtime              = 5.0,
+                size                    = 5,
+                soundHit                = "weapon/emp_hit",
+                soundStart              = "weapon/emp_fire",
+                weaponType              = "Cannon",
+                rgba                    = "0.5 0.7 1.0 0.8",
+                noSelfDamage            = true,
+            },
+        },
+        customparams = {
+            is_roguelike_drone = "true",
+            drone_element = "electric",
+        },
+    },
+}

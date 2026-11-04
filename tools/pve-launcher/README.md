@@ -23,3 +23,9 @@ For the local PVE room, stop SPADS and run `..\pve-distribution\Sync-BarPveServe
 The local server writes `pve-data\server-version.json`. To publish that file for friends, run `Sync-BarPveServerPreset.ps1 -ServerRoot D:\BeyondAllReason\BAR-Server -PublishStatus -GitRepository D:\BeyondAllReason\BAR-PVE`. It commits only `status/server-version.json` to `pve/main` and pushes it. The public read-only address is `https://raw.githubusercontent.com/GodAlone945/Beyond-All-Reason/pve/main/status/server-version.json`. The PVE repo must be clean in its index and synchronized with `origin/pve/main`; Git Credential Manager must be signed in.
 
 Build a friend package with `Package-BarPveFriendLauncher.ps1 -PackageDirectory D:\BAR-PVE-Friend-Build -OutputDirectory D:\BAR-PVE-Releases`. The package config uses the public GitHub status URL and configured lobby endpoint; it contains no local server paths.
+
+## Local Roguelike development distinction
+
+The launcher has a local development-room override: when DevSource and the local SPADS preset/link/readiness checks match, it can use the SDD source even when release `server-version.json` still points at an older SDZ. This does not deploy that source to remote friends. In Development mode, select **Roguelike 模式** to add `roguelike_mode=1` to the isolated single-player startscript. Leave it unchecked for ordinary PVE. The development test command for Meteor Strike still requires the separate `roguelike_weapon_effect_tests=1` option.
+
+See [Roguelike development, play and room guide](../../doc/RoguelikeOverview.md) and the read-only `tools/roguelike/Get-RoguelikeAudit.ps1` for current local version/link checks. A saved startscript is evidence of the last generated game, not the room's live settings.

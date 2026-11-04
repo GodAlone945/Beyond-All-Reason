@@ -31,12 +31,14 @@ local spGetUnitIsDead = Spring.GetUnitIsDead
 local spGetGroundHeight = Spring.GetGroundHeight
 local spGetProjectilePosition = Spring.GetProjectilePosition
 local spGetProjectileVelocity = Spring.GetProjectileVelocity
+local spGetUnitRulesParam = Spring.GetUnitRulesParam
 
 local math_random = math.random
 local math_pi = math.pi
 local math_max = math.max
 local math_cos = math.cos
 local math_sin = math.sin
+local math_floor = math.floor
 
 -- A fun unit test is: /luarules benchmark armclaw armclaw 200 10 1000
 
@@ -218,8 +220,10 @@ function gadget:ProjectileCreated(proID, proOwnerID, weaponDefID)
 	projTable.weaponDefID = weaponDefID
 	projTable.proOwnerID = proOwnerID
 	projTable.spark_ceg = spark.ceg
-	projTable.spark_range = spark.range
-	projTable.spark_maxunits = spark.maxunits
+	local rangeMultiplier = spGetUnitRulesParam(proOwnerID, "roguelike_lightning_chain_range_mult") or 1
+	local targetBonus = spGetUnitRulesParam(proOwnerID, "roguelike_lightning_chain_targets_bonus") or 0
+	projTable.spark_range = spark.range * rangeMultiplier
+	projTable.spark_maxunits = spark.maxunits + math_floor(targetBonus)
 	projTable.x = xp + xv
 	projTable.y = yp + yv
 	projTable.z = zp + zv

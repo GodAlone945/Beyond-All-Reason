@@ -27,6 +27,10 @@ local spGetSpectatingState = Spring.GetSpectatingState
 
 local texts = {}
 local weaponInfo = require("common/weapons")
+local factionShopWeapons = {}
+for _, faction in pairs(VFS.Include("unitbasedefs/roguelike_weapon_catalog.lua").factions) do
+	for _, item in ipairs(faction.weapons) do factionShopWeapons[item.id] = item end
+end
 local damageStats = (VFS.FileExists("LuaUI/Config/BAR_damageStats.lua"))
 	and VFS.Include("LuaUI/Config/BAR_damageStats.lua", {}, VFS.RAW)
 local gameName = Game.gameName
@@ -183,6 +187,7 @@ local cachedTitleTextWidth = 0
 local cachedTitleFontSize = 0
 local cachedBuildProg = nil
 local cachedExp = nil
+local cachedShopRevision = 0
 local lastComputeFrame = -999
 local COMPUTE_INTERVAL = 6
 
@@ -778,7 +783,10 @@ local function computeContent(uDefID, uID, shiftBool)
 	local weaponDefToNum = {}
 	for i = 1, #uWeps do
 		local wDefID = uWeps[i].weaponDef
-		if isBogusWeapon[wDefID] then
+		local shopItem = wDefs[wDefID].customParams.roguelike_shop_item
+		local shopOwned = not shopItem or not uID
+			or (Spring.GetUnitRulesParam(uID, "roguelike_shop_" .. shopItem .. "_level") or 0) > 0
+		if isBogusWeapon[wDefID] or not shopOwned then
 			-- continue
 		elseif weaponGroupNumbers[wDefID] >= 0 then
 			local wCount = wepCounts[wDefID]
@@ -883,6 +891,20 @@ local function computeContent(uDefID, uID, shiftBool)
 
 		local defaultArmorDamage = damages[defaultArmorIndex] * damageFactor
 		local targetArmorDamage = baseTargetDamage * damageFactor
+		local factionShopWeapon = factionShopWeapons[custom.roguelike_custom_weapon]
+		if factionShopWeapon then
+			-- The native beam is visual only; catalog damage is applied by Lua.
+			local level = uID and (Spring.GetUnitRulesParam(uID,
+				"roguelike_shop_" .. factionShopWeapon.id .. "_level") or 0) or 1
+			local damageMult = 1
+			for index = 1, math.min(level - 1, #(factionShopWeapon.levels or {})) do
+				damageMult = factionShopWeapon.levels[index].damageMult or damageMult
+			end
+			defaultArmorDamage = factionShopWeapon.damage * damageMult
+				* (uID and (Spring.GetUnitRulesParam(uID, "roguelike_damage_mult") or 1) or 1)
+			targetArmorDamage = defaultArmorDamage
+			if uWep.type == "BeamLaser" then burst, dpsCycle = 1, reload end
+		end
 
 		if range > 0 then
 			local oRld = max(0.00000000001, uWep.stockpile == true and uWep.stockpileTime / 30 or uWep.reload)
@@ -905,6 +927,12 @@ local function computeContent(uDefID, uID, shiftBool)
 				DrawText(texts.weap .. ":", format(yellow .. "%dx" .. white .. " %s", wepCount, wpnName))
 			else
 				DrawText(texts.weap .. ":", wpnName)
+			end
+			if custom.roguelike_shop_item and uID then
+				local level = Spring.GetUnitRulesParam(uID, "roguelike_shop_" .. custom.roguelike_shop_item .. "_level") or 0
+				local active = not custom.roguelike_custom_weapon or Spring.GetUnitRulesParam(uID,
+					"roguelike_weapon_equipped_" .. custom.roguelike_shop_item) == 1
+				DrawText("Lv.", tostring(level) .. (active and "  [ON]" or "  [OFF]"))
 			end
 
 			if uExp ~= 0 then
@@ -1187,7 +1215,9 @@ local function drawStats(uDefID, uID)
 	-- Dirty check for content caching
 	local gameFrame = Spring.GetGameFrame()
 	local shiftBool = (shift ~= false)
+	local shopRevision = uID and (Spring.GetUnitRulesParam(uID, "roguelike_shop_revision") or 0) or 0
 	local contentDirty = (uDefID ~= cachedDefID) or (uID ~= cachedUnitID) or (shiftBool ~= cachedShift)
+		or shopRevision ~= cachedShopRevision
 
 	if not contentDirty and uID and (gameFrame - lastComputeFrame >= COMPUTE_INTERVAL) then
 		local _, bp = Spring.GetUnitIsBeingBuilt(uID)
@@ -1202,6 +1232,7 @@ local function drawStats(uDefID, uID)
 		cachedDefID = uDefID
 		cachedUnitID = uID
 		cachedShift = shiftBool
+		cachedShopRevision = shopRevision
 		lastComputeFrame = gameFrame
 		computeContent(uDefID, uID, shiftBool)
 	end

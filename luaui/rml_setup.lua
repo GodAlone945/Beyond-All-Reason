@@ -66,13 +66,14 @@ RmlUi.CreateContext = NewCreateContext
 
 -- Load fonts
 RmlUi.LoadFontFace("fonts/Poppins-Regular.otf", true)
+RmlUi.LoadFontFace("fonts/fallbacks/SourceHanSans-Regular.ttc", true)
 local font_files = VFS.DirList("fonts/exo2", "*.ttf")
 for _, file in ipairs(font_files) do
 	Spring.Echo("loading font", file)
 	RmlUi.LoadFontFace(file, true)
 end
 
---RmlUi.LoadFontFace("fonts/fallbacks/SourceHanSans-Regular.ttc", true)
+
 --RmlUi.LoadFontFace("fonts/monospaced/SourceCodePro-Medium.otf")
 
 -- Mouse Cursor Aliases

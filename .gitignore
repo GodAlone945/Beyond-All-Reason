@@ -8,3 +8,10 @@
 .project
 *.code-workspace
 .lux
+
+# Local test runs and rollback snapshots are not part of a source version.
+/.preview/
+/.dsh-acl/
+*.before-*.bak
+/tools/roguelike/rollback/
+/docs/roguelike/rollback/

@@ -10,6 +10,8 @@
 		"areaattack_tooltip": "区域攻击圆圈内的所有东西(点击-拖动)",
 		"manualfire": "裂解炮",
 		"manualfire_tooltip": "发射强大的指挥官裂解炮",
+		"roguelike_meteor_strike": "陨石打击",
+		"roguelike_meteor_strike_tooltip": "向指定地面位置召唤陨石",
 		"manuallaunch": "发射",
 		"manuallaunch_tooltip": "向指定目标发射一枚导弹",
 		"patrol": "巡逻",

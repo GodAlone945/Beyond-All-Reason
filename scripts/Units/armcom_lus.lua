@@ -76,6 +76,23 @@ local weapons = {
 	[32] = "dgun",
 }
 
+-- Roguelike ARM uses laser 1, manual D-Gun 2, AA 3, shop weapons 4-12,
+-- and shield 13. Auxiliary slots must never enter the D-Gun aim state.
+local roguelikeShopSlots = {}
+local roguelikeOptions = Spring.GetModOptions and Spring.GetModOptions() or {}
+local roguelikeOption = roguelikeOptions.roguelike_mode
+if roguelikeOption == true or roguelikeOption == 1
+	or roguelikeOption == "1" or roguelikeOption == "true" then
+	weapons[2] = "dgun"
+	for weapon = 3, 16 do weapons[weapon] = "aux" end
+	for weaponNum, weapon in ipairs(UnitDefs[unitDefID].weapons) do
+		local params = WeaponDefs[weapon.weaponDef].customParams
+		if params.roguelike_shop_item then
+			roguelikeShopSlots[weaponNum] = params
+		end
+	end
+end
+
 local SIG_AIM = 2
 local SIG_WALK = 4
 
@@ -1146,10 +1163,22 @@ function script.AimFromWeapon(weapon)
 		return ruparm
 	elseif weapons[weapon] == "dgun" then
 		return 0 -- this is somehow the best way to ensuse dgun hits whatever target its aimed at
+	elseif weapons[weapon] == "aux" then
+		return ruparm
 	end
 end
 
 function script.AimWeapon(weapon, heading, pitch)
+	local shop = roguelikeShopSlots[weapon]
+	if shop then
+		if (Spring.GetUnitRulesParam(unitID, "roguelike_shop_" .. shop.roguelike_shop_item .. "_level") or 0) <= 0 then
+			return false
+		end
+		if shop.roguelike_custom_weapon
+			and Spring.GetUnitRulesParam(unitID, "roguelike_weapon_equipped_" .. shop.roguelike_shop_item) ~= 1 then
+			return false
+		end
+	end
 	if isDancing then
 		StartThread(StopDance1)
 	end
@@ -1208,6 +1237,10 @@ function script.AimWeapon(weapon, heading, pitch)
 		Turn(luparm, 1, rad(15) - pitch, rad(900.0000)) -- Turn(ruparm,	x-axis, math.rad(-55) - pitch, math.rad(390))
 		WaitForTurn(aimy1, 2)
 		return true
+	elseif weapons[weapon] == "aux" then
+		-- Aux weapons have independent engine targeting. Do not move or signal
+		-- the shared commander arm, which the primary laser needs to finish aiming.
+		return not isAimingDgun
 	end
 end
 
@@ -1227,6 +1260,12 @@ function script.FireWeapon(weapon)
 		turn(biggun, 1, -85, 100)
 		move(barrel, 2, 0, 5)
 		return true
+	elseif weapons[weapon] == "aux" then
+		local api = GG.RoguelikeFactionWeapons
+		if roguelikeShopSlots[weapon] and api and api.OnWeaponFired then
+			api.OnWeaponFired(unitID, weapon)
+		end
+		return false
 	end
 end
 
@@ -1237,6 +1276,8 @@ function script.QueryWeapon(weapon)
 		return laserflare
 	elseif weapons[weapon] == "dgun" then
 		return lflare
+	elseif weapons[weapon] == "aux" then
+		return laserflare
 	end
 end
 
