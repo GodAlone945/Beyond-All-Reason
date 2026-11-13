@@ -71,6 +71,8 @@ local commanderProjectileByWeaponDef = {}
 local beamLastProcFrame = {}
 local meteorPayloadWeaponDefID
 local projectileState = {}
+-- ??????????????/???????
+local electricOrbs = {}
 local activeByOwner = {}
 local activeProjectileCount = 0
 local pendingMeteors = {}
@@ -250,8 +252,29 @@ local function triggerEffect(ownerID, teamID, sourceID, weaponDefID, targetID, x
 	if effectEntry.id == "chain" or effectEntry.id == "ricochet" then
 		local maxTargets = min(config.maxTargets or 1, #fractions)
 		local targets = collectProcTargets(teamID, x, z, radius, targetID, maxTargets)
+		local weaponParams = WeaponDefs[weaponDefID] and WeaponDefs[weaponDefID].customParams
+		local electricOrb = effectEntry.id == "chain" and weaponParams
+			and weaponParams.roguelike_shop_item == "electric_orb"
 		for index, childTarget in ipairs(targets) do
-			dealProcDamage(ownerID, teamID, weaponDefID, childTarget, damage * fractions[index])
+			local targetX, targetY, targetZ
+			local sourceY
+			if electricOrb then
+				sourceY = select(2, spGetUnitPosition(targetID))
+				targetX, targetY, targetZ = spGetUnitPosition(childTarget)
+			end
+			if dealProcDamage(ownerID, teamID, weaponDefID, childTarget, damage * fractions[index])
+				and electricOrb then
+				if targetX then
+					sourceY = sourceY or spGetGroundHeight(x, z) + 20
+					for step = 1, 3 do
+						local fraction = step / 3
+						spSpawnCEG("roguelike-electric-orb-chain",
+							x + (targetX - x) * fraction,
+							sourceY + (targetY - sourceY) * fraction,
+							z + (targetZ - z) * fraction, 0, 1, 0)
+						end
+				end
+			end
 		end
 	elseif effectEntry.id == "burst" then
 		local targets = collectProcTargets(teamID, x, z, radius, targetID, config.maxTargets or 8)
@@ -417,6 +440,9 @@ local function enqueueMeteor(ownerID, teamID, x, z, depth, damageScale, frame, e
 	return true
 end
 
+local getEnemyTargets
+local getNearestEnemy
+
 local function launchMeteorStrike(ownerID, teamID, x, z, frame)
 	local autoLevel = spGetUnitRulesParam(ownerID, "roguelike_shop_meteor_weapon_level") or 0
 	local automatic = autoLevel > 0
@@ -426,10 +452,17 @@ local function launchMeteorStrike(ownerID, teamID, x, z, frame)
 		return false
 	end
 	local count = automatic and (autoLevel >= 3 and 2 or 1) or getUpgrade(ownerID, "meteor", "count")
+	local multishotCount = tonumber(spGetUnitRulesParam(ownerID, "roguelike_multishot_count")) or 1
+	count = min(limits.maxMeteorProjectiles or 9, count + max(0, multishotCount - 1))
 	local radius = automatic and (130 + (autoLevel - 1) * 15) or getUpgrade(ownerID, "meteor", "radius")
 	local damageScale = automatic and (1 + (autoLevel - 1) * 0.18) or 1
 	local split = automatic and autoLevel >= 4 or getUpgrade(ownerID, "meteor", "split") >= 1
 	local burnZone = automatic and autoLevel >= 2
+	local targets = getEnemyTargets(teamID, x, z, definitions.testWeapons.meteor.command.range)
+	count = min(count, #targets)
+	if count <= 0 then
+		return false
+	end
 	local queue = pendingMeteors[ownerID]
 	if (queue and #queue or 0) + count > limits.maxPendingMeteorsPerPlayer then
 		return false
@@ -437,16 +470,16 @@ local function launchMeteorStrike(ownerID, teamID, x, z, frame)
 	nextMeteorFrame[ownerID] = frame + floor(interval * gameSpeed + 0.5)
 	local eventID = newEvent(ownerID, teamID, meteorPayloadWeaponDefID)
 	for index = 1, count do
-		local spread = (index - (count + 1) * 0.5) * min(70, radius * 0.18)
-		enqueueMeteor(ownerID, teamID, x + spread, z + spread * 0.5, 0, damageScale, frame, eventID,
+		local target = targets[index]
+		enqueueMeteor(ownerID, teamID, target.x, target.z, 0, damageScale, frame, eventID,
 			{ radius = radius, split = split, burnZone = burnZone })
 	end
 	return true
 end
 
-local function getNearestEnemy(teamID, x, z, searchRadius)
-	local bestID
-	local bestDistance = searchRadius * searchRadius
+getEnemyTargets = function(teamID, x, z, searchRadius)
+	local targets = {}
+	local maxDistance = searchRadius * searchRadius
 	for _, unitID in ipairs(spGetUnitsInCylinder(x, z, searchRadius) or {}) do
 		local teamID2 = spGetUnitTeam(unitID)
 		if teamID2 and not spAreTeamsAllied(teamID, teamID2) then
@@ -454,13 +487,22 @@ local function getNearestEnemy(teamID, x, z, searchRadius)
 			if ux then
 				local dx, dz = ux - x, uz - z
 				local distance = dx * dx + dz * dz
-				if distance < bestDistance or (distance == bestDistance and (not bestID or unitID < bestID)) then
-					bestID, bestDistance = unitID, distance
+				if distance <= maxDistance then
+					targets[#targets + 1] = { id = unitID, x = ux, z = uz, distance = distance }
 				end
 			end
 		end
 	end
-	return bestID
+	table.sort(targets, function(a, b)
+		if a.distance == b.distance then return a.id < b.id end
+		return a.distance < b.distance
+	end)
+	return targets
+end
+
+getNearestEnemy = function(teamID, x, z, searchRadius)
+	local targets = getEnemyTargets(teamID, x, z, searchRadius)
+	return targets[1] and targets[1].id
 end
 
 local function spawnChild(parentID, x, y, z, angle, depth, damageScale, frame)
@@ -495,7 +537,7 @@ local function spawnChild(parentID, x, y, z, angle, depth, damageScale, frame)
 	if parent.kind == "meteor" then
 		params.gravity = -Game.gravity / (gameSpeed * gameSpeed)
 		params.model = "meteor.s3o"
-		params.cegTag = "meteortrail"
+		params.cegTag = "roguelike-meteortrail"
 	end
 	spawnContext = {
 		kind = parent.kind,
@@ -583,7 +625,7 @@ local function processMeteorQueue(frame)
 						ttl = gameSpeed * 8,
 						gravity = -Game.gravity / (gameSpeed * gameSpeed),
 						model = "meteor.s3o",
-						cegTag = "meteortrail",
+						cegTag = "roguelike-meteortrail",
 					}
 					spawnContext = {
 						kind = "meteor",
@@ -755,6 +797,20 @@ function gadget:AllowCommand(unitID, unitDefID, unitTeam, cmdID, cmdParams, cmdO
 end
 
 function gadget:ProjectileCreated(projectileID, ownerID, weaponDefID)
+	local def = WeaponDefs[weaponDefID]
+	if def and def.customParams and def.customParams.roguelike_shop_item == "electric_orb" then
+		local x, y, z = spGetProjectilePosition(projectileID)
+		if x then
+			local rangeMult = ownerID and spGetUnitRulesParam(ownerID, "roguelike_range_mult") or 1
+			local range = (def.range or 560) * (tonumber(rangeMult) or 1)
+			local teamID = spGetProjectileTeamID(projectileID) or (ownerID and spGetUnitTeam(ownerID))
+			local damage = def.damages and tonumber(def.damages[0]) or 0
+			electricOrbs[projectileID] = { x = x, y = y, z = z, distance = 0, range = range,
+				ownerID = ownerID, teamID = teamID, weaponDefID = weaponDefID, damage = damage,
+				targetNextFrame = {}, nextArcFrame = spGetGameFrame(),
+				expires = spGetGameFrame() + math.ceil(range / 500 * gameSpeed) + gameSpeed }
+		end
+	end
 	local effect = launcherByWeaponDef[weaponDefID] or (payloadByWeaponDef[weaponDefID] and "meteor_payload")
 	if not ownerID then return end
 	local unitDef = UnitDefs[spGetUnitDefID(ownerID)]
@@ -796,7 +852,8 @@ function gadget:ProjectileCreated(projectileID, ownerID, weaponDefID)
 				baseDamage = (weaponDef.damages and tonumber(weaponDef.damages[0])) or 0,
 				originX = originX, originZ = originZ, firedFrame = spGetGameFrame(),
 				eventID = newEvent(ownerID, spGetProjectileTeamID(projectileID) or teamID, weaponDefID),
-				effectEntries = { { id = mapping.effect } }, procCoefficient = 0.5, procHit = false,
+				effectEntries = { { id = mapping.effect } },
+				procCoefficient = mapping.procCoefficient or 0.5, procHit = false,
 			})
 		end
 	end
@@ -827,10 +884,11 @@ function gadget:UnitDamaged(unitID, unitDefID, unitTeam, damage, paralyzer, weap
 				local eventID = newEvent(attackerID, teamID, weaponDefID)
 				local baseDamage = (weaponDef.damages and tonumber(weaponDef.damages[0])) or 0
 				local entries = { { id = mapping.effect } }
+				local procCoefficient = mapping.procCoefficient or 0.5
 				registerHitContext(attackerID, teamID, weaponDefID, unitID, x, z,
-					baseDamage, eventID, entries, 0.5)
+					baseDamage, eventID, entries, procCoefficient)
 				onHit(attackerID, teamID, "commander_beam", weaponDefID, unitID, x, z,
-					baseDamage, eventID, entries, 0.5, 0)
+					baseDamage, eventID, entries, procCoefficient, 0)
 			end
 		end
 		return
@@ -893,6 +951,49 @@ function gadget:UnitPreDamaged(unitID, unitDefID, unitTeam, damage, paralyzer, w
 end
 
 function gadget:GameFrame(frame)
+	-- ???????????????????????????
+	local expired = {}
+	local aura = definitions.electricOrbAura
+	for id, orb in pairs(electricOrbs) do
+		local x, y, z = spGetProjectilePosition(id)
+		if x then
+			local dx, dy, dz = x - orb.x, y - orb.y, z - orb.z
+			orb.distance = orb.distance + sqrt(dx * dx + dy * dy + dz * dz)
+			orb.x, orb.y, orb.z = x, y, z
+			if aura and frame >= orb.nextArcFrame then
+				orb.nextArcFrame = frame + aura.tickFrames
+				local radiusSq = aura.radius * aura.radius
+				for _, targetID in ipairs(spGetUnitsInCylinder(x, z, aura.radius) or {}) do
+					local targetTeam = spGetUnitTeam(targetID)
+					local nextHit = orb.targetNextFrame[targetID] or 0
+					if targetTeam and orb.teamID and not spAreTeamsAllied(orb.teamID, targetTeam)
+						and frame >= nextHit and spValidUnitID(targetID) then
+						local tx, ty, tz = spGetUnitPosition(targetID)
+						if tx and ty and tz then
+							local ax, ay, az = tx - x, ty - y, tz - z
+							if ax * ax + ay * ay + az * az <= radiusSq then
+								local arcDamage = orb.damage * aura.damageFraction
+								if dealProcDamage(orb.ownerID, orb.teamID, orb.weaponDefID, targetID, arcDamage) then
+									orb.targetNextFrame[targetID] = frame + aura.tickFrames
+									for step = 1, 3 do
+										local fraction = step / 3
+										spSpawnCEG("roguelike-electric-orb-chain",
+											x + ax * fraction, y + ay * fraction, z + az * fraction, 0, 1, 0)
+									end
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+		if not x or orb.distance >= orb.range or frame >= orb.expires then expired[#expired + 1] = id end
+	end
+	table.sort(expired)
+	for _, id in ipairs(expired) do
+		electricOrbs[id] = nil
+		if spGetProjectilePosition(id) then spDeleteProjectile(id) end
+	end
 	-- Kill contexts are only needed while the damage event can synchronously destroy its target.
 	pendingKillContexts = {}
 	processMeteorQueue(frame)
@@ -908,10 +1009,8 @@ function gadget:GameFrame(frame)
 				and frame >= (nextMeteorFrame[ownerID] or 0) then
 				local ownerX, _, ownerZ = spGetUnitPosition(ownerID)
 				local teamID = spGetUnitTeam(ownerID)
-				local targetID = ownerX and getNearestEnemy(teamID, ownerX, ownerZ, definitions.testWeapons.meteor.command.range)
-				if targetID then
-					local targetX, _, targetZ = spGetUnitPosition(targetID)
-					if targetX then launchMeteorStrike(ownerID, teamID, targetX, targetZ, frame) end
+				if ownerX then
+					launchMeteorStrike(ownerID, teamID, ownerX, ownerZ, frame)
 				end
 			end
 		end

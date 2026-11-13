@@ -378,7 +378,11 @@ local function updateDrones(frame)
             local targetZ = pz + dz -- 目标 Z 坐标 = 指挥官 Z + 偏移
 
             -- 通过 MoveCtrl 直接设置位置
-            mcSetPosition(droneID, targetX, targetY, targetZ) -- 直接设置无人机位置
+            -- MoveCtrl 仅用于绕行/维修状态。攻击状态交给引擎移动；若仍每帧设置轨道坐标，
+            -- 会把无人机拉回原处，抵消 CMD_ATTACK 的追击移动。
+            if mcIsEnabled(droneID) then
+                mcSetPosition(droneID, targetX, targetY, targetZ)
+            end
 
             -- 保持无敌
             local health, maxHealth = spGetUnitHealth(droneID) -- 获取无人机当前生命值和最大生命值

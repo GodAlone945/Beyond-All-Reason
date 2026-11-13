@@ -26,7 +26,7 @@ return {
         speed               = 300.0,
         maxwaterdepth       = 0,
         objectname          = "Units/scavboss/LEGASSISTDRONE.s3o",
-        script              = "Units/LEGCA.cob",
+        script              = "Units/roguelike_electric_drone.lua",
         selfdestructas      = "smallExplosionGenericSelfd",
         sightdistance       = 800,
         turninplaceanglelimit = 360,

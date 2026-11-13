@@ -90,7 +90,7 @@ Spawner 当前阶段常量如下，平衡调整后应同步更新本文：
 
 ## ARM 初始武器、商店攻击与测试回退
 
-- ARM Roguelike 原生槽位为主激光1、手动 D-Gun2、防空3、通用商店4–8、阵营商店9–12、个人护盾13。普通 BAR 的 `armcom` 不改；海底激光不进入 Roguelike 武器池。
+- ARM Roguelike 原生槽位为主激光1、手动 D-Gun2、防空3、通用商店4–8、阵营商店9–12、电球13、个人护盾14。普通 BAR 的 `armcom` 不改；海底激光不进入 Roguelike 武器池。
 - ARM 商店武器由 `unitbasedefs/roguelike_unit_tweaks.lua` 安装。未购买/未装备槽位射程为0，ARM AimWeapon 再复查 RulesParam。FireWeapon 经 `GG.RoguelikeFactionWeapons.OnWeaponFired` 触发零原生伤害的阵营武器机制，原生弹丸/光束负责画面；不要恢复旧虚拟攻击控制器。
 - COR/LEG 保留既有原生商店槽位。ARM 原生购买/发射路径已做 headless 引擎验证；画面、Boss、重放与双人同步仍需相应实测，不能将无窗口引擎测试等同于画面验收。
 - 每次测试性代码改动，必须先在 `tools/roguelike/rollback/<改动名>/` 保存被改文件的原始快照，并提供 `Restore.ps1` 与文件清单；测试入口需有明确模式/选项门控。验证失败时可以直接运行对应恢复脚本。不得用旧快照覆盖快照之后的其他文件改动。
@@ -139,7 +139,7 @@ Spawner 当前阶段常量如下，平衡调整后应同步更新本文：
 | 金属来源 | 吸收符合条件的敌军残骸获得金属；升级卡当前另加每次 0.1 金属产出 | 如未来决定彻底取消所有被动金属产出，需同时改 `METAL_INCOME_PER_UPGRADE`、UnitResourcing、升级说明和本手册 |
 | 商店解锁 | 商店通过稳定 `itemId` 在 synced 端验证并扣款 | 雷霆步枪解锁问题按 UnitDef、槽位映射、商店 ID 三处一起排查 |
 | 护盾卡 | 虚拟护盾由 synced 伤害和充能逻辑管理；容量 2000/3500/5000，3% 容量/秒、0.8 电/点 | 只修改 RML/HUD 不算修复完成 |
-| ARM 初始武器 | 主激光1、D-Gun2、防空3、商店4–12、护盾13；未购买槽禁用 | 原生发射与命中已做 headless 测试；图形表现与双人同步待验证 |
+| ARM 初始武器 | 主激光1、D-Gun2、防空3、商店4–13、护盾14；未购买槽禁用 | 电球图形表现、实际命中与双人同步待验证 |
 | 商店武器 | 五款通用商店武器动态追加到三族；阵营专属武器配置集中于 catalog | 按实机 DPS 与金属收入复核价格、目标类别和槽位索引 |
 | 升级节奏 | 归一化 XP 阈值 25/50/75/110/145/190/245/310/395/480/565/680/850/…；波次累计保底 2/4/6/8/10/12/13/14；Tier 2 从角色 Lv.5、Tier 3 从 Lv.9；每次候选保底 1 张防御卡 | 改阈值时同时核对 XP 正规化、波次保底、Team 状态、`maxAvailableTier` 和 HUD |
 | 数值一致性 | P0 已把指挥官基础值、+40% 武器、雷霆数值收进 `roguelike_unit_tweaks.lua`，并回退上游 UnitDef | 商店槽位与重复激光仍需逐阵营核对 |
@@ -153,7 +153,7 @@ Spawner 当前阶段常量如下，平衡调整后应同步更新本文：
 | 无人机攻击 | `game_roguelike_orbit_drones.lua` 的搜索半径与三族 Rogue 无人机视野同为 800；ARM 主攻击槽限定 `SURFACE` | 检查敌人视野、目标类别和 `CMD_ATTACK`；紧急修复期间无人机按既定优先级暂停攻击 |
 | 残骸保留 | Salvage 白名单残骸免疫普通武器/爆炸 Feature 伤害；D-Gun 击杀不入回收白名单，D-Gun 可破坏残骸 | 只保护本模式登记的敌军残骸；确认不会阻止 reclaim 或重复发放金属 |
 | 自动防空 | Roguelike 自爆威胁标记只改变自动目标优先级；Legion 保留原 AA 定义，ARM/Cortex 使用独立 Rogue AA 槽 | 实机检查高速 Martyr 的可见、自动选敌和拦截；玩家手动指定目标不得被覆盖 |
-| 近身索敌与开火 | ARM 的第 4–13 槽不再误入 D-Gun 瞄准分支；COR/LEG 使用模式专用 COB 补足新增槽位回调；伤害回调读取 `GetUnitWeaponTarget` 第三项 | 静态回调表检查和无界面加载已完成；多敌贴身时的实际开火、命中与伤害仍未实机验证 |
+| 近身索敌与开火 | ARM 的第 3–16 槽进入辅助武器分支，不会误入 D-Gun 瞄准；COR/LEG 使用模式专用 COB 补足新增槽位回调；伤害回调读取 `GetUnitWeaponTarget` 第三项 | 静态回调表检查和无界面加载已完成；多敌贴身时的实际开火、命中与伤害仍未实机验证 |
 
 ### 三阵营专属武器维护守则
 
@@ -165,7 +165,7 @@ Spawner 当前阶段常量如下，平衡调整后应同步更新本文：
 - 改槽位时逐阵营检查 UnitDef `weapondefs`/`weapons[]`、`customParams.roguelike_shop_item`、SHOP_ITEMS、购买消息、RuleParams 与装备状态；通用商店仍使用既有 ID 和购买记录。
 - 静态检查不能验证 WeaponDef 引擎解析、真实命中/DPS、爆炸、自伤、联机同步和压力下性能。结果逐项标注“实测通过 / 失败 / 未验证”，记录地图、阵营、等级与实测数值；未运行游戏不得把目标值写为已验证。
 - `Spring.GetUnitWeaponTarget(unitID, weaponNum)` 返回 `targetType, isUserTarget, target`。Synced 攻击回调必须读取第三项作为目标；不能把第二项布尔标志传给 `ValidUnitID` 或伤害结算。多目标锁定但无伤害可能由这类返回值错位导致，修复后实测自动目标和手动目标两种情况。
-- 新增武器槽还必须有对应的单位动画脚本回调。ARM 原脚本把 4–32 槽当成 D-Gun，反复索敌时会置位 `isAimingDgun` 并阻止主激光瞄准；Roguelike 开启时仅将 4–13 槽映射为独立辅助武器。COR 原 COB 缺少第 4 槽的 `AimWeapon` 和第 5–13 槽回调，LEG 原 COB 缺少第 5–13 槽回调；本模式用 `corcom_roguelike.cob`、`legcom_roguelike.cob` 补足，保留原动画和第 1–3 槽（LEG 第 1–4 槽）的行为。更改槽位数量时同步维护这三份脚本，不能只修改 UnitDef 或伤害 Gadget。
+- 新增武器槽还必须有对应的单位动画脚本回调。ARM 原脚本把 4–32 槽当成 D-Gun，反复索敌时会置位 `isAimingDgun` 并阻止主激光瞄准；Roguelike 开启时将 3–16 槽映射为独立辅助武器，覆盖电球13与护盾14。COR 原 COB 缺少第 4 槽的 `AimWeapon` 和第 5–13 槽回调，LEG 原 COB 缺少第 5–13 槽回调；本模式用 `corcom_roguelike.cob`、`legcom_roguelike.cob` 补足，保留原动画和第 1–3 槽（LEG 第 1–4 槽）的行为。更改槽位数量时同步维护这三份脚本，不能只修改 UnitDef 或伤害 Gadget。
 - COR/LEG 专用 COB 由 `tools/roguelike/Build-RoguelikeCommanderCob.ps1` 从原 COB 生成。修改原脚本或追加槽位后，运行 `powershell -NoProfile -ExecutionPolicy Bypass -File tools/roguelike/Build-RoguelikeCommanderCob.ps1`，核对原回调入口与新增 `AimFromWeaponN`、`QueryWeaponN`、`AimWeaponN`、`FireWeaponN`。生成器的静态检查只能证明文件结构与回调表一致；必须在新开的一局中分别测试三族基础激光、D-Gun、自动防空、通用武器与阵营武器。测试时让多名敌人在近身和射程边缘同时移动，分别记录持续开火、目标切换、命中和伤害；这项实机验证目前未完成。
 
 
@@ -186,11 +186,12 @@ Roguelike HUD/商店需订阅 `LobbyOverlayActive1/0` LuaUI 消息：进入 Chob
 
 ## Commander shield and Photon Cleave maintenance
 
-The Roguelike UnitTweaks layer adds `roguelike_personal_shield` and one Shield weapon slot only when Roguelike mode is enabled. Do not edit the stock commander UnitDefs for this feature. The synced upgrades gadget remains authoritative for shield capacity, energy cost, recharge delay, and HUD RulesParams. The native shield supplies the visible bubble and projectile interception/repulsion. At each synced update, native shield power is read back into the Roguelike shield state; direct damage that reaches UnitPreDamaged is absorbed there and written back to native shield power. This keeps projectile interception, virtual damage absorption, recharge, and HUD values on one power pool. Keep native automatic recharge and upkeep at zero; energy is charged explicitly by the synced gadget. If adding or changing a shield slot, preserve per-Team state in `selectTeam` / `storeTeam` and verify all three commander UnitDefs expose the marked slot.
+The Roguelike UnitTweaks layer adds `roguelike_personal_shield` and one Shield weapon slot only when Roguelike mode is enabled. Do not edit the stock commander UnitDefs for this feature. The synced upgrades gadget owns shield capacity, energy cost, recharge delay, and HUD RulesParams. The native shield supplies the visible bubble and projectile interception/repulsion; its maximum power covers all three upgrade tiers (10500). BAR's `unit_shield_behaviour.lua` normally consumes hits on shields it does not register, so it explicitly lets the marked Roguelike shield use engine repulsion and charges its native power once per projectile (or per beam frame). The synced upgrade state reads that native power back each second. Damage that reaches `UnitPreDamaged` has passed the native shield and must not be absorbed a second time. Keep native automatic recharge and upkeep at zero; energy is charged explicitly by the synced gadget. If adding or changing a shield slot, preserve per-Team state in `selectTeam` / `storeTeam` and verify all three commander UnitDefs expose the marked slot.
 
 Faction special weapon dispatch must resolve WeaponDef from `UnitDefs[unitDefID].weapons[weaponNum]` when UnitWeaponFired does not provide a WeaponDef ID. Cone effects are implemented in `game_roguelike_faction_weapons.lua` and use the live unit target as the forward direction; tests should cover angle edges, range edges, target-class filters, target switching, and max-target limits. Keep numerical weapon values in `RoguelikeBalance.md`; this manual records mechanism and maintenance constraints.
 
 Validation record: static code inspection only. The engine shield rendering/interception API, Lua callback timing, and cone damage in a live match remain unverified. Use the in-game test steps in `RoguelikeBalance.md`; record build/version, faction, shield tier, projectile type, energy level, and observed values before calling any result verified.
+For shield repulsion, test ARM, COR, and LEG separately after selecting the Shield I upgrade card. Fire a Cannon or missile projectile at full charge: it should change direction at the bubble, leave commander health unchanged, and reduce the shield HUD value. Repeat until the shield reaches zero; the next projectile should reach the commander. Repeat with two players on different Teams to verify their shield pools remain independent. Native beams can be blocked but cannot be physically reflected like ballistic projectiles.
 ## Shop repeat purchases and scroll retention
 
 Attribute and weapon shop purchases may be issued more than once during the same simulation frame. The shop can pause a single-player game, so per-frame purchase throttles are invalid; rely on the request nonce deduplication in the synced message handler instead. If shop DOM is rebuilt after a purchase, preserve each category scroll container's `scroll_top` and restore it after layout widths settle. Keep the three columns independent and clamp restored positions to each column's new `scroll_height - client_height` range. Live UI behavior still requires an in-game check.
@@ -262,8 +263,8 @@ If the Meteor Strike command is missing, first inspect the generated SPADS `star
 
 1. 伤害吸血必须通过 `game_roguelike_upgrades.lua` 的 `applyDamageTriggeredHealing` 和现有 `healCurrentCommander` 结算；不得由武器 Gadget 直接设置指挥官生命。
 2. 伤害使用击中前后目标生命差，最多按击中前 HP 计。不得使用 WeaponDef 理论伤害或 UnitDamaged 的 damage 参数当作有效扣血量。
-3. P0 仅直伤系数 1.0。陨石中心 0.5、分裂弹 0.35、范围 0.20/0.25、DoT 0.10/0.15 通过归因和对应卡解锁；未解锁的范围/DoT 系数必须为 0。新增类型必须通过 owner、team、root attack 和深度归因，不可依 WeaponDef 名称猜测。
-4. 吸血与命中回血共用 0.6% MaxHP/秒触发预算，同时受 1.5% MaxHP/秒持续治疗总预算约束。击杀回血保留每人独立 2 秒冷却并使用持续总预算。主动治疗和补给仍按既有独立预算。
+3. 生命偷取卡只有一个类型，分 I–V 五级，每级增加 25 个百分点命中概率；每次实际命中回复 500 + 5% MaxHP，与伤害值无关。概率超过 100% 时，每次命中先保证 `floor(probability)` 次回复，再按小数部分额外判定一次。
+4. 商店“吸取”每级将实际生命伤害的 5% 转为治疗。生命偷取与“吸取”都不走旧的触发治疗预算，但回复不得超过缺失生命；击杀回血仍使用持续治疗总预算和每人 2 秒冷却。主动治疗和补给仍按既有预算。
 5. 满血不记预算；护盾吸收、友军/自伤、中立目标、无生命损失、死亡攻击者、EMP 麻痹、D-Gun 禁止触发。一次目标伤害不得重复结算，DoT 只能按有限时间窗再次结算。
 6. Coop 中卡牌、攻击归属、每秒治疗额、去重表和击杀冷却均按 Team 存取；所有实际回血仍由 Synced 负责。增加/修改卡时同步 RulesParams、卡牌当前/升级描述、HUD 和 Balance 数值记录。
 7. 验证顺序：运行 Lua 语法解析、纯数值规则用例、武器效果模拟；之后在单人三阵营测试直伤/陨石/分裂/范围/DoT、友军、自伤、护盾和 50 HP 残血过杀；最后双人同 AllyTeam 测各自伤害、预算隔离、死亡重建及回放。纯模拟不能代替实机确认。

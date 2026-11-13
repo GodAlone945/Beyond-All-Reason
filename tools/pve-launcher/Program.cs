@@ -679,7 +679,8 @@ namespace BarCustomTestLauncher
                 if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
                 foreach (string relative in relatives) AddCandidate(candidates, Path.Combine(drive.RootDirectory.FullName, relative));
             }
-            return candidates.FirstOrDefault();
+            return candidates.FirstOrDefault(path => !String.Equals(Path.GetPathRoot(path), @"C:\", StringComparison.OrdinalIgnoreCase))
+                ?? candidates.FirstOrDefault();
         }
 
         private static void AddCandidate(List<string> values, string path)

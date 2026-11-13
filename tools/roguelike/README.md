@@ -18,6 +18,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/roguelike/Get-Roguelik
 npm.cmd install --prefix .preview/roguelike-validation --cache .preview/npm-cache --no-save --ignore-scripts --no-audit --no-fund fengari-node-cli@0.1.0 luaparse@0.3.1
 node tools/roguelike/Validate-Sources.cjs
 .preview\roguelike-validation\node_modules\.bin\fengari.cmd tools/roguelike/Test-WeaponEffects.lua
+node tools/roguelike/Test-ShieldRepulsion.cjs
+.preview\roguelike-validation\node_modules\.bin\fengari.cmd tools/roguelike/Test-Multishot.lua
 .preview\roguelike-validation\node_modules\.bin\fengari.cmd tools/roguelike/Test-DamageHealing.lua
 .preview\roguelike-validation\node_modules\.bin\fengari.cmd tools/roguelike/Benchmark-DamageHealing.lua 100000
 ```

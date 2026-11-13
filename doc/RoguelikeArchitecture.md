@@ -197,7 +197,7 @@ Lua/RML 静态检查只能确认结构和引用关系；上述时机、动画、
 
 ### 专属武器调用链
 
-`unitbasedefs/roguelike_weapon_catalog.lua` 是 ARM/COR/LEG 共12款专属武器配置源。三阵营均由 `roguelike_unit_tweaks.lua` 加载原生商店槽；ARM 使用主激光1、手动 D-Gun2、防空3、通用商店4–8、阵营商店9–12、护盾13。`game_roguelike_upgrades.lua` 管理购买、等级、装备上限及未购买槽位的射程禁用。ARM Lua 单位脚本在 AimWeapon 中复查购买/装备状态，并通过 FireWeapon 调用 `GG.RoguelikeFactionWeapons.OnWeaponFired` 结算阵营机制；弹道和光束由引擎发射，不再另行虚拟攻击。详细单位信息按购买状态列出武器，购买/装备后使用 `roguelike_shop_revision` 刷新缓存。
+`unitbasedefs/roguelike_weapon_catalog.lua` 是 ARM/COR/LEG 共12款专属武器配置源。三阵营均由 `roguelike_unit_tweaks.lua` 加载原生商店槽；ARM 使用主激光1、手动 D-Gun2、防空3、通用商店4–8、阵营商店9–12、电球13、护盾14。`game_roguelike_upgrades.lua` 管理购买、等级、装备上限及未购买槽位的射程禁用。ARM Lua 单位脚本在 AimWeapon 中复查购买/装备状态，并通过 FireWeapon 调用 `GG.RoguelikeFactionWeapons.OnWeaponFired` 结算阵营机制；弹道和光束由引擎发射，不再另行虚拟攻击。详细单位信息按购买状态列出武器，购买/装备后使用 `roguelike_shop_revision` 刷新缓存。
 
 新增 synced 消息 `roguelike_equip:<itemId>` 用于装备或卸下已购买的阵营武器；synced 端重新校验玩家、阵营、阶段、所有权与3槽上限。自定义伤害通过 `Spring.AddUnitDamage(target, damage, 0, commanderID, weaponDefID)` 进入引擎伤害链，供 `UnitPreDamaged` 识别指挥官攻击并复用伤害升级。`Spring.GetUnitWeaponTarget` 返回 `targetType, isUserTarget, target`，目标 ID 必须取第三个返回值；错用第二项会让自动目标攻击被跳过。装填和单位属性由 `GG.UpdateUnitAttributes` 更新，专属射程另乘 `roguelike_range_mult`。这些是静态调用链结论；WeaponDef、Projectile/Explosion call-in 与最终运行值仍需实机验收。
 

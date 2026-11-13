@@ -16,7 +16,7 @@ return {
 		flighttime = 3,
 		gravityaffected = "true",
 		model = "meteor.s3o",
-		cegtag = "meteortrail",
+		cegtag = "roguelike-meteortrail",
 		impactonly = true,
 		noselfdamage = true,
 		avoidfriendly = true,

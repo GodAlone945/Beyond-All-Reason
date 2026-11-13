@@ -369,90 +369,42 @@ body {
     position: relative;
     width: 100%;
     box-sizing: border-box;
-    display: flex;
-    flex-direction: row;
-    gap: 12dp;
+    display: block;
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
 }
 
-.shop-column {
+.shop-scroll {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    flex: 0 0 auto;
-    min-width: 0;
-    min-height: 0;
-    width: 32%;
-    box-sizing: border-box;
-    padding: 0dp 6dp;
-    border-width: 1dp;
-    border-color: rgba(185, 138, 50, 110);
-    border-radius: 6dp;
-    background-color: rgba(22, 20, 15, 180);
-}
-
-.shop-column-title {
-    display: block;
     width: 100%;
-    flex: 0 0 auto;
-    align-self: stretch;
+    height: 100%;
     box-sizing: border-box;
-    padding: 8dp 2dp;
-    color: #f1cd6c;
-    font-size: 15dp;
-    font-weight: 900;
-    text-align: center;
-    border-bottom-width: 1dp;
-    border-bottom-color: rgba(185, 138, 50, 150);
-}
-
-.shop-column-scroll {
-    position: relative;
-    width: auto;
-    min-width: 0;
-    flex: 1 1 auto;
-    align-self: stretch;
-    min-height: 0;
-    box-sizing: border-box;
-    display: block;
-    margin: 0dp;
-    padding-top: 8dp;
+    padding: 0dp 6dp 8dp;
     overflow-x: hidden;
     overflow-y: auto;
 }
 
-/* 滚动条占用项宽度会让商品多的前两列显窄；将窄条放入列内右侧留白。 */
-.shop-column-scroll scrollbarvertical {
-    width: 6dp;
-    margin-right: -6dp;
-}
-
-.shop-column-scroll scrollbarvertical slidertrack {
-    background-color: rgba(0, 0, 0, 0);
-}
-
-.shop-column-scroll scrollbarvertical sliderbar {
+.shop-scroll scrollbarvertical { width: 6dp; }
+.shop-scroll scrollbarvertical slidertrack { background-color: rgba(0, 0, 0, 0); }
+.shop-scroll scrollbarvertical sliderbar {
     background-color: rgba(185, 138, 50, 150);
     border-radius: 3dp;
     min-height: 22dp;
 }
-
-.shop-column-scroll scrollbarvertical sliderbar:hover {
-    background-color: #efc75d;
-}
+.shop-scroll scrollbarvertical sliderbar:hover { background-color: #efc75d; }
 
 .shop-row {
     display: flex;
     flex-direction: row;
     gap: 10dp;
-    justify-content: center;
+    justify-content: flex-start;
+    padding: 0dp 3dp;
     margin-bottom: 10dp;
 }
 
 .shop-section-title {
-    margin: 8dp 0dp 2dp;
+    margin: 8dp 0dp 8dp;
     padding: 6dp 4dp;
     color: #f1cd6c;
     font-size: 15dp;
@@ -460,15 +412,16 @@ body {
 }
 
 .shop-item {
-    /* 普通块级宽度先铺满滚动层；LuaUI 再按实际布局宽度校正。 */
-    width: 100%;
-    min-width: 100%;
+    /* LuaUI 根据滚动区域宽度将每行三张卡片设为等宽。 */
+    width: 31%;
+    min-width: 0;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     align-items: stretch;
     justify-content: space-between;
     min-height: 112dp;
-    margin-bottom: 8dp;
+    margin-bottom: 0dp;
     background-color: #191710;
     border-radius: 8dp;
     border-width: 2dp;

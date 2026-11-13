@@ -135,7 +135,9 @@
         <div class="shop-title">战场商店</div>
         <div id="shop-metal" class="shop-metal">金属：0</div>
         <div id="shop-items" class="shop-items">
-            <!-- 商品列表由 Lua 动态填充 -->
+            <div id="shop-scroll" class="shop-scroll">
+                <!-- 商品列表由 Lua 动态填充，滚动容器保持不变 -->
+            </div>
         </div>
         <div id="shop-close" class="shop-close">关闭 [Esc]</div>
     </div>

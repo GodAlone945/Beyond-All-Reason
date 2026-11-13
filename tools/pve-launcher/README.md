@@ -16,7 +16,7 @@ Modes:
 - PVE: checks server readiness and its pinned GitHub Release manifest, installs the exact package, verifies its size, SHA-256 and `modinfo.lua`, and then connects to the private lobby.
 - Development: starts the local BAR-PVE Git tree in an isolated single-player Recoil session.
 
-The PVE store is `data\bar-pve`. Its `state.json` keeps active and historical versions. Installed archives are linked or copied into `data\games` under their PVE-only names. The updater blocks activation and rollback while Recoil is running. Engine updates are deliberately separate from game updates.
+The PVE store is `data\bar-pve` inside the selected BAR installation. Its `state.json` keeps active and historical versions. Installed archives are linked or copied into that installation's `data\games` under their PVE-only names. PVE actions reject a `chobby_config.json` on C: so game files cannot be added there. The updater blocks activation and rollback while Recoil is running. Engine updates are deliberately separate from game updates.
 
 For the local PVE room, stop SPADS and run `..\pve-distribution\Sync-BarPveServerPreset.ps1 -ServerRoot D:\BeyondAllReason\BAR-Server -ActivateDefault`, then start SPADS. This verifies the server archive and changes only its default hosting preset to `pve`, with a config backup. The launcher refuses PVE multiplayer until it sees the matching preset and live SPADS process.
 

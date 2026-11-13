@@ -76,8 +76,8 @@ local weapons = {
 	[32] = "dgun",
 }
 
--- Roguelike ARM uses laser 1, manual D-Gun 2, AA 3, shop weapons 4-12,
--- and shield 13. Auxiliary slots must never enter the D-Gun aim state.
+-- Roguelike ARM uses laser 1, manual D-Gun 2, AA 3, shop weapons 4-13
+-- (electric orb at 13), and shield 14. Auxiliary slots never enter D-Gun aim.
 local roguelikeShopSlots = {}
 local roguelikeOptions = Spring.GetModOptions and Spring.GetModOptions() or {}
 local roguelikeOption = roguelikeOptions.roguelike_mode

@@ -5,20 +5,20 @@ local failures, total = 0, 0
 local function expect(value, wanted, message)
 	assert(value == wanted, (message or "unexpected result") .. ": expected " .. tostring(wanted) .. ", got " .. tostring(value))
 end
-local function fixture(enabled)
+local function fixture(enabled, randomValue)
 	local f = { frame = 0, rules = { [1] = {} }, projectiles = {}, spawned = {}, deleted = {}, hits = {}, markers = {} }
 	local definitions = assert(loadfile("unitbasedefs/roguelike_weapon_effects.lua"))()
 	f.definitions = definitions
 	local units = { [1] = { team = 1, x = 0 }, [10] = { team = 2, x = 100 }, [11] = { team = 2, x = 110 } }
 	local noop = function() end
 	local env = setmetatable({}, { __index = _G })
-	env.math = setmetatable({ random = function() return 0 end }, { __index = math })
+	env.math = setmetatable({ random = function() return randomValue or 0 end }, { __index = math })
 	env.gadget, env.GG = {}, {}
 	env.Game = { gameSpeed = 30, gravity = 120 }
 	env.GameCMD, env.CMDTYPE, env.LOG = { ROGUELIKE_METEOR_STRIKE = 34567 }, { ICON_MAP = 1 }, { ERROR = 1 }
 	env.gadgetHandler = { IsSyncedCode = function() return true end, RegisterCMDID = noop, RegisterAllowCommand = noop }
 	env.VFS, env.Script = { Include = function() return definitions end }, { SetWatchWeapon = noop }
-	env.UnitDefs = { [1] = { customParams = { iscommander = true }, weapons = { { weaponDef = 3 }, { weaponDef = 4 } } }, [2] = { customParams = {}, health = 1000 } }
+	env.UnitDefs = { [1] = { customParams = { iscommander = true }, weapons = { { weaponDef = 3 }, { weaponDef = 4 }, { weaponDef = 5 } } }, [2] = { customParams = {}, health = 1000 } }
 	env.UnitDefNames = { armcom = { id = 1 } }
 	env.WeaponDefNames = { roguelike_test_meteor_payload = { id = 1 } }
 	env.WeaponDefs = {
@@ -26,6 +26,7 @@ local function fixture(enabled)
 		[2] = { customParams = { roguelike_weapon_effect = "splitter" }, damages = { [0] = 180 } },
 		[3] = { customParams = { roguelike_shop_item = "plasma_weapon" }, damages = { [0] = 100 }, type = "Cannon" },
 		[4] = { customParams = { roguelike_shop_item = "sniper_weapon" }, damages = { [0] = 100 }, type = "BeamLaser", reload = 2 },
+		[5] = { customParams = { roguelike_shop_item = "electric_orb" }, damages = { [0] = 120 }, type = "Cannon", reload = 1.8 },
 	}
 	local spring = {
 		GetModOptions = function() return { roguelike_mode = enabled ~= false, roguelike_weapon_effect_tests = true } end,
@@ -158,6 +159,29 @@ test("projectile proc uses base damage rather than already amplified hit", funct
 	local f = fixture(); f.rules[1].roguelike_shop_plasma_extension_level = 1
 	f.root(1, 3); f.gadget:UnitDamaged(10, 2, 2, 200, false, 3, 1, 1)
 	f.tick(18); assert(#f.hits > 0); expect(f.hits[1].damage, 35)
+end)
+test("electric orb chains once at its configured chance and draws impact sparks", function()
+	local f = fixture(); f.rules[1].roguelike_shop_electric_orb_level = 1
+	f.root(50, 5, 25)
+	f.gadget:UnitDamaged(10, 2, 2, 240, false, 5, 50, 1)
+	expect(#f.hits, 1); expect(f.hits[1].id, 11); expect(f.hits[1].damage, 54)
+	expect(#f.markers, 3); expect(f.markers[1], "roguelike-electric-orb-chain")
+	f.gadget:UnitDamaged(10, 2, 2, 240, false, 5, 50, 1)
+	expect(#f.hits, 1)
+	f.root(51, 5, 25); f.gadget:UnitDamaged(10, 2, 2, 240, false, 5, 51, 1)
+	expect(#f.hits, 1) -- shared owner chain cooldown
+	f.tick(12); f.root(52, 5, 25); f.gadget:UnitDamaged(10, 2, 2, 240, false, 5, 52, 1)
+	expect(#f.hits, 2)
+end)
+test("locked electric orb does not register a chain hit", function()
+	local f = fixture()
+	f.root(59, 5, 25); f.gadget:UnitDamaged(10, 2, 2, 120, false, 5, 59, 1)
+	expect(#f.hits, 0); expect(#f.markers, 0)
+end)
+test("electric orb does not chain at the 18 percent probability boundary", function()
+	local f = fixture(true, 0.18); f.rules[1].roguelike_shop_electric_orb_level = 1
+	f.root(60, 5, 25); f.gadget:UnitDamaged(10, 2, 2, 120, false, 5, 60, 1)
+	expect(#f.hits, 0); expect(#f.markers, 0)
 end)
 test("beam proc works without projectile ID and triggers once per reload", function()
 	local f = fixture(); f.rules[1].roguelike_shop_sniper_extension_level = 1

@@ -1130,30 +1130,14 @@ local function weaponDef_Post(name, wDef)
 			wDef.interceptedbyshieldtype = 1024 --separate from combined MissileLauncher, except raptors
 		end
 
-		-- Roguelike commanders use a repulser that must cover even weapons whose
-		-- stock definition explicitly has interceptedbyshieldtype=0. A private bit
-		-- keeps ordinary BAR shields unchanged while enabling those weapons to hit
-		-- this mode-only shield.
-		local roguelikeMode = modOptions.roguelike_mode
-		if roguelikeMode == true or roguelikeMode == 1 or roguelikeMode == "1" or roguelikeMode == "true" then
-			if wDef.weapontype ~= "Shield" then
-				local interceptMask = tonumber(wDef.interceptedbyshieldtype or wDef.interceptedByShieldType) or 0
-				local bit = roguelikeShieldInterceptBit
-				if math.floor(interceptMask / bit) % 2 == 0 then
-					interceptMask = interceptMask + bit
-				end
-				wDef.interceptedbyshieldtype = interceptMask
-			end
-		end
-
 		local shieldModOption = modOptions.experimentalshields
 
 		if shieldModOption == "absorbplasma" then
-			if shield then
+			if shield and not customparams.roguelike_personal_shield then
 				shield.repulser = false
 			end
 		elseif shieldModOption == "absorbeverything" then
-			if shield then
+			if shield and not customparams.roguelike_personal_shield then
 				shield.repulser = false
 			end
 			if (not wDef.interceptedbyshieldtype) or wDef.interceptedbyshieldtype ~= 1 then
@@ -1170,7 +1154,7 @@ local function weaponDef_Post(name, wDef)
 
 		local bounceShields = shieldModOption == "bounceeverything" or shieldModOption == "bounceplasma"
 		if bounceShields then
-			if shield then
+			if shield and not customparams.roguelike_personal_shield then
 				local shieldPowerMultiplier = 0.529 --converts to pre-shield rework vanilla integration
 				local shieldRegenMultiplier = 0.4 --converts to pre-shield rework vanilla integration
 				shield.power = shield.power * shieldPowerMultiplier
@@ -1178,6 +1162,18 @@ local function weaponDef_Post(name, wDef)
 				shield.startingpower = shield.startingpower * shieldPowerMultiplier
 				shield.repulser = true
 			end
+		end
+
+		-- Apply the Roguelike-only interception bit after shield type overrides,
+		-- which otherwise replace the weapon mask and let shots pass through.
+		local roguelikeMode = modOptions.roguelike_mode
+		if roguelikeMode == true or roguelikeMode == 1 or roguelikeMode == "1" or roguelikeMode == "true" then
+			local interceptMask = tonumber(wDef.interceptedbyshieldtype or wDef.interceptedByShieldType) or 0
+			local bit = roguelikeShieldInterceptBit
+			if math.floor(interceptMask / bit) % 2 == 0 then
+				interceptMask = interceptMask + bit
+			end
+			wDef.interceptedbyshieldtype = interceptMask
 		end
 
 		-- allows unblocked weapons' aoe to reach inside shields

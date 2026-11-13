@@ -9,12 +9,14 @@
 -- 还负责弹窗期间的本地暂停请求和鼠标事件隔离，但不持有权威游戏状态。
 --------------------------------------------------------------------------------
 local roguelikeOption = Spring.GetModOptions().roguelike_mode
+-- 兼容 Spring 传入的布尔、数字和字符串形式；未启用时不注册此 Widget。
 if roguelikeOption ~= true and roguelikeOption ~= 1 and roguelikeOption ~= "1" and roguelikeOption ~= "true" then
 	return false
 end
 local coopOption = Spring.GetModOptions().roguelike_coop
 local COOP_ENABLED = coopOption == true or coopOption == 1 or coopOption == "1" or coopOption == "true"
 
+-- RmlUi 不可用时无法创建 HUD 文档，因此直接退出。
 if not RmlUi then
     Spring.Echo("警告: 当前游戏引擎环境不支持 RmlUi，Widget 退出！")
     return
@@ -61,6 +63,7 @@ local UPDATE_INTERVAL = 0.5 -- 秒
 
 local SHOP_ITEMS = {
     { id = "damage", name = "武器强化", desc = "+2% 武器伤害", baseCost = 80, costStep = 60, maxLevel = 20, icon = "伤害", category = "damage" },
+    { id = "absorb", name = "吸取", desc = "每次命中恢复攻击伤害的 5%", baseCost = 250, costStep = 200, maxLevel = 10, icon = "生命", category = "health" },
     { id = "health", name = "装甲强化", desc = "+10% 最大生命值", baseCost = 100, costStep = 75, maxLevel = 20, icon = "生命", category = "health" },
     { id = "regen", name = "纳米修复", desc = "开局准备或脱战额外回复 +0.30% 最大生命/秒，购买后回满生命", baseCost = 250, costStep = 220, maxLevel = 5, icon = "修复", category = "health" },
     { id = "reload", name = "冷却强化", desc = "+8% 攻击速度", baseCost = 120, costStep = 90, maxLevel = 15, icon = "攻速", category = "reload" },
@@ -70,9 +73,12 @@ local SHOP_ITEMS = {
     { id = "salvage_speed", name = "快速回收", desc = "+15% 残骸吸收速度", baseCost = 100, costStep = 80, maxLevel = 10, icon = "回收", category = "salvage" },
     { id = "lightning_weapon", name = "雷霆步枪", desc = "解锁近程连锁闪电武器", baseCost = 1200, costStep = 0, maxLevel = 1, icon = "贵重", category = "weapon" },
     { id = "plasma_weapon", name = "Tzar 重型主炮", desc = "解锁 Cortex Tzar 的 1100 伤害重型主炮", baseCost = 1800, costStep = 0, maxLevel = 1, icon = "贵重", category = "weapon" },
+    { id = "multishot", name = "多重射击", desc = "每级增加两枚同帧弹丸，最多九枚", baseCost = 1200, costStep = 1000, maxLevel = 4, icon = "攻击", category = "weapon" },
+    { id = "drone_swarm", name = "轨道无人机", desc = "每级召唤 2 架无人机，最多 8 架", baseCost = 900, costStep = 700, maxLevel = 4, icon = "无人机", category = "support" },
     { id = "sniper_weapon", name = "湮灭狙击光束", desc = "解锁高伤害远程单体武器", baseCost = 2800, costStep = 0, maxLevel = 1, icon = "狙击", category = "sniper" },
     { id = "barrage_weapon", name = "凝固汽油覆盖炮", desc = "解锁超远程范围覆盖打击", baseCost = 2700, costStep = 0, maxLevel = 1, icon = "覆盖", category = "barrage" },
     { id = "shockwave_weapon", name = "冲击清场炮", desc = "解锁击退与清杂范围武器", baseCost = 2200, costStep = 0, maxLevel = 1, icon = "清场", category = "crowd" },
+    { id = "electric_orb", name = "电球", desc = "ARM 专属实体电球；命中后 18% 概率传导至附近敌人", baseCost = 1400, costStep = 0, maxLevel = 1, icon = "闪电", category = "weapon", prototypeFaction = "armada" },
     { id = "meteor_weapon", name = "陨星自动打击", desc = "自动锁定并召下陨石；Lv.2 落地灼烧，Lv.3 增加数量，Lv.4 分裂", baseCost = 2200, costStep = 1200, maxLevel = 4, icon = "陨星", category = "weapon", type = "supportSkill" },
     { id = "lightning_extension", name = "超导分叉", desc = "每级：连锁半径 +20%、目标 +1、直击伤害 +25%", baseCost = 900, costStep = 600, maxLevel = 3, icon = "超导", category = "weapon", requires = "lightning_weapon", requiresName = "雷霆步枪" },
     { id = "plasma_extension", name = "裂变弹头", desc = "每级：Tzar 主炮直击与溅射伤害 +25%；解锁余震重击", baseCost = 1100, costStep = 750, maxLevel = 3, icon = "裂变", category = "weapon", requires = "plasma_weapon", requiresName = "Tzar 重型主炮" },
@@ -81,13 +87,19 @@ local SHOP_ITEMS = {
     { id = "shockwave_extension", name = "动能粉碎", desc = "每级：对基础生命不高于 2500 的单位伤害 +30%；解锁范围爆裂", baseCost = 1000, costStep = 700, maxLevel = 3, icon = "粉碎", category = "crowd", requires = "shockwave_weapon", requiresName = "冲击清场炮" },
     { id = "rl_coop_medical_beacon", name = "团队修复信标", desc = "350 范围盟友指挥官在 8 秒内恢复最多 12% 生命；每人冷却 65 秒，消耗 350 电力", baseCost = 1800, costStep = 0, maxLevel = 1, icon = "治疗", category = "support", type = "supportSkill" },
 }
+-- 本地请求序号：即使玩家在同一游戏帧连续点击，也能生成不同的请求标识。
 local requestCounter = 0
+-- 向 LuaRules 提交需要绑定当前玩家的操作，例如购买、装备或使用技能。
+-- action 是请求类型，itemId 是商品或技能 ID；这里只负责发送，不在 UI 中结算。
 local function personalRequest(action, itemId)
+	-- 每发送一次请求就递增序号，避免同帧请求使用相同标识。
 	requestCounter = requestCounter + 1
+	-- 消息格式为“操作:游戏帧-本地序号:目标 ID”。同步 Gadget 会解析并验证请求。
 	spSendLuaRulesMsg(action .. ":" .. Spring.GetGameFrame() .. "-" .. requestCounter .. ":" .. itemId)
 end
 
 local factionWeaponCatalog = VFS.Include("unitbasedefs/roguelike_weapon_catalog.lua")
+-- 阵营专属武器也放进本地商店展示列表；实际价格与购买资格由 Gadget 验证。
 for faction, factionConfig in pairs(factionWeaponCatalog.factions) do
 	for _, weapon in ipairs(factionConfig.weapons) do
 		SHOP_ITEMS[#SHOP_ITEMS + 1] = {
@@ -122,6 +134,7 @@ local UPGRADE_CARD_COLORS = {
 -- 状态
 
 local widgetState = {
+    -- RML 对象、本地界面状态及最近一次显示值只在本客户端保存。
     rmlContext    = nil,
     document      = nil,
     dmHandle      = nil,
@@ -157,11 +170,8 @@ local widgetState = {
     shopOpen      = false,
     lobbyHidden   = false,
     shopRenderSignature = nil,
-    shopLayoutColumnWidth = 0,
-    shopLayoutScrollWidths = {},
-    shopLayoutCardWidths = {},
+    shopLayoutCardWidth = 0,
     shopLayoutErrorShown = false,
-    pendingShopScroll = nil,
     shopObservedLevels = {},
     shopPurchasable = {},
     shopEquippable = {},
@@ -180,6 +190,7 @@ local widgetState = {
 -- 工具函数
 
 local function findCommander()
+    -- 根据本地玩家所属队伍寻找指挥官，后续 HUD 从该单位读取 RulesParam。
     local myTeamID = spGetMyTeamID()
     if not myTeamID then return nil end
     local units = spGetTeamUnits(myTeamID)
@@ -197,11 +208,13 @@ local function formatMult(val)
 end
 
 local function percentBar(val, maxVal)
+    -- 将倍率相对 1 的增量映射到 0–100%，用于属性条宽度。
     if maxVal <= 0 then return 0 end
     return math.min(math.max((val - 1.0) / maxVal * 100, 0), 100)
 end
 
 local function updatePauseState()
+    -- 单人选卡或打开商店时请求暂停；Coop 不发送暂停命令。
     if COOP_ENABLED then return end
     local shouldPause = widgetState.pauseReasons.upgrade or widgetState.pauseReasons.shop
     local _, _, isPaused = spGetGameSpeed()
@@ -218,6 +231,7 @@ end
 -- DataModel（RmlUi 的数据绑定核心）
 
 local modelData = {
+    -- RML 文档绑定的初始展示值；运行时由 dmHandle 写入最新状态。
     wave       = 0,
     kills      = 0,
     atkMult    = "1.00x",
@@ -235,7 +249,7 @@ local modelData = {
     metal      = 0,
     shield     = "0 / 0",
     barrier    = "0",
-    healBuild  = "吸血0% 命中0.00%/次",
+    healBuild    = "偷取 0% | 吸取 0%伤害",
     phaseText  = "准备",
     phaseTime  = 0,
     topPhase = "战斗准备",
@@ -251,6 +265,7 @@ local modelData = {
 }
 
 local function setupDataModel(context)
+    -- 旧版手工字段绑定方案保留在下方注释中；当前使用 OpenDataModel。
     if not context then
         return nil
     end
@@ -319,6 +334,7 @@ end
 -- UI 操作
 
 local function syncBuildMenuSuppression()
+    -- 模态界面开启时通知建造菜单隐藏交互，避免点击穿透。
     local suppressed = widgetState.upgradeActive or widgetState.shopOpen
     if WG.buildmenu and WG.buildmenu.setRoguelikeSuppressed then
         WG.buildmenu.setRoguelikeSuppressed(suppressed)
@@ -326,6 +342,7 @@ local function syncBuildMenuSuppression()
 end
 
 local function makeUpgradeListDraggable(doc)
+    -- 鼠标按下时记录面板尺寸和偏移，拖动期间将其限制在视口内。
     local root = doc and doc:GetElementById("owned-upgrades")
     local handle = doc and doc:GetElementById("owned-upgrades-handle")
     if not root or not handle then return nil end
@@ -368,6 +385,7 @@ local function makeUpgradeListDraggable(doc)
 end
 
 local function showUpgradePanel(choiceId, choices, refreshes, skips, banishes)
+    -- 保存 synced 发来的本轮候选及剩余操作次数，并打开选卡遮罩。
     widgetState.upgradeActive = true
     widgetState.choiceId      = choiceId
     widgetState.choices       = choices
@@ -383,6 +401,7 @@ local function showUpgradePanel(choiceId, choices, refreshes, skips, banishes)
     local dm = widgetState.dmHandle --
 
     for i = 0, 2 do
+        -- RML 卡位从 0 编号，Lua 候选数组从 1 编号；缺少候选时清空旧内容。
         local c = choices[i + 1]
         local idx = tostring(i)
         if dm and c then
@@ -408,6 +427,7 @@ local function showUpgradePanel(choiceId, choices, refreshes, skips, banishes)
         if descElement then descElement.inner_rml = c and (c.desc or "") or "" end
         if cardElement then cardElement:SetClass("hidden", not c) end
         if cardElement then
+            -- 根据卡牌图标切换类别配色，避免上轮卡牌样式残留。
             for _, color in ipairs(UPGRADE_CARD_COLORS) do
                 cardElement:SetClass(color.class, c ~= nil and c.icon == color.icon)
             end
@@ -429,6 +449,7 @@ local function showUpgradePanel(choiceId, choices, refreshes, skips, banishes)
 end
 
 local function hideUpgradePanel()
+    -- 完成选择或跳过后撤销选卡暂停原因并恢复界面可见状态。
     widgetState.upgradeActive = false
     widgetState.pauseReasons.upgrade = false
     updatePauseState()
@@ -447,6 +468,7 @@ local function handlePickUpgrade(index)
     local choice = widgetState.choices[index + 1] -- Lua 1-based → RML 0-based
     if not choice or not choice.id then return end
 	if widgetState.banishArmed then
+		-- 已进入“移除候选”状态时，点击卡牌改为发送移除请求。
 		spSendLuaRulesMsg("roguelike_banish:" .. widgetState.choiceId .. ":" .. choice.id)
 		widgetState.banishArmed = false
 		local status = widgetState.document:GetElementById("upgrade-action-status")
@@ -484,6 +506,7 @@ local function bindShopItemClicks()
 			complete = false
 		end
 		local equip = widgetState.document:GetElementById("shop-equip-" .. itemId)
+		-- 装备按钮单独绑定；阻止事件继续冒泡到商品卡片触发购买。
 		if equip and not widgetState.shopBoundEquipIds[itemId] then
 			equip:AddEventListener("click", function(event)
 				if widgetState.shopEquippable[boundItemId] then
@@ -506,6 +529,7 @@ local function handleShopItemsClick(event)
 	-- 避免同一次点击提交两笔购买请求。
 	local target = event and event.target_element
 	while target and target.id ~= "shop-items" do
+		-- 从实际点击节点向上寻找商品或装备按钮，兼容点击卡片内的文字。
 		local elementId = target.id or ""
 		if elementId:sub(1, 11) == "shop-equip-" then
 			local itemId = elementId:sub(12)
@@ -536,8 +560,10 @@ local function handleShopItemsClick(event)
 end
 
 local function refreshShopItems()
-    local container = widgetState.document:GetElementById("shop-items")
-    if not container then return end
+    -- 根据当前队伍资源、指挥官和购买状态生成三列商品卡片。
+    -- 以下禁用状态仅用于展示；synced 端仍会独立校验每个请求。
+    local scroll = widgetState.document:GetElementById("shop-scroll")
+    if not scroll then return end
 
     local myTeamID = spGetMyTeamID() -- 获取队伍id
     local metal = 0
@@ -548,13 +574,14 @@ local function refreshShopItems()
     local commanderID = findCommander()
     local commanderDef = commanderID and UnitDefs[spGetUnitDefID(commanderID)]
     local commanderName = commanderDef and string.lower(commanderDef.name or "") or ""
+    -- 用指挥官名称前缀筛选本阵营商品；无法识别时不展示阵营专属武器。
     local faction = commanderName:sub(1, 3) == "arm" and "armada"
         or commanderName:sub(1, 3) == "cor" and "cortex"
         or commanderName:sub(1, 3) == "leg" and "legion"
         or nil
     local upgradeCount = commanderID and (spGetUnitRulesParam(commanderID, "roguelike_upgrade_count") or 0) or 0
     local columnItems = { stats = {}, weapons = {}, faction = {} }
-    local columnItemIds = { stats = {}, weapons = {}, faction = {} }
+    -- 分别保存三列商品、购买/装备可用状态、禁用原因和最终渲染签名。
     local purchasable = {}
     local equippable = {}
     local disabledReasons = {}
@@ -563,6 +590,7 @@ local function refreshShopItems()
     local renderedItemIds = {}
     local renderedEquipIds = {}
     local factionEquippedCount = 0
+    -- 已装备的专属武器数量用于决定“装备”按钮是否可用。
     for _, factionConfig in pairs(factionWeaponCatalog.factions) do
         for _, weapon in ipairs(factionConfig.weapons) do
             if commanderID and spGetUnitRulesParam(commanderID, "roguelike_weapon_equipped_" .. weapon.id) == 1 then
@@ -571,16 +599,18 @@ local function refreshShopItems()
         end
     end
     for _, item in ipairs(SHOP_ITEMS) do
-        if not item.faction or item.faction == faction then
+        -- 公共商品对所有阵营可见；专属与原型商品只在对应阵营展示。
+        if (not item.faction or item.faction == faction)
+            and (not item.prototypeFaction or item.prototypeFaction == faction) then
         renderedItemIds[#renderedItemIds + 1] = item.id
         if item.faction then renderedEquipIds[item.id] = true end
         local factionWeapon = item.faction ~= nil
         local rulesLevel = commanderID
             and (tonumber(spGetUnitRulesParam(commanderID, "roguelike_shop_" .. item.id .. "_level") or 0) or 0)
             or 0
-        -- Keep the server-confirmed purchase result visible if the unit rules param
-        -- has not replicated to LuaUI yet (or is hidden by its access scope).
+        -- RulesParam 尚未同步到 LuaUI 或受访问范围限制时，暂时以服务器确认结果显示等级。
         local level = math.max(rulesLevel, widgetState.shopObservedLevels[item.id] or 0)
+        -- 商品等级影响下次价格、满级提示及是否能装备。
         local cost = factionWeapon and math.floor(item.baseCost * (({ 1, 0.55, 0.85 })[level + 1] or 0) + 0.5)
             or (item.baseCost + item.costStep * level)
         local maxed = level >= item.maxLevel
@@ -589,7 +619,9 @@ local function refreshShopItems()
             and spGetUnitRulesParam(commanderID, "roguelike_weapon_equipped_" .. item.id) == 1 or false
         local prerequisiteMet = not item.requires
             or (commanderID and (spGetUnitRulesParam(commanderID, "roguelike_shop_" .. item.requires .. "_level") or 0) > 0)
+        -- 同时满足前置、累计升级次数、未满级和金属充足才显示为可购买。
         local canAfford = prerequisiteMet and unlockMet and not maxed and metal >= cost
+        -- 按解锁、前置、等级和金属顺序生成不可购买原因，供按钮和提示使用。
         disabledReasons[item.id] = not unlockMet and ("需要累计升级 " .. (item.unlockAt or 0) .. " 次")
             or (not prerequisiteMet and ("请先解锁" .. (item.requiresName or "前置武器")))
             or (maxed and "该商品已经满级")
@@ -600,6 +632,7 @@ local function refreshShopItems()
             or (not prerequisiteMet and ("需要 " .. (item.requiresName or "前置武器")))
             or (maxed and "满级" or tostring(cost))
         purchasable[item.id] = canAfford
+        -- 已装备时始终允许卸下；未装备时必须留有专属武器槽位。
         local equipAllowed = factionWeapon and level > 0
             and (equipped or factionEquippedCount < (factionWeaponCatalog.maxEquippedFactionWeapons or 3))
         equippable[item.id] = equipAllowed
@@ -607,9 +640,11 @@ local function refreshShopItems()
         local column = factionWeapon and "faction"
             or ((item.category == "damage" or item.category == "health" or item.category == "reload"
                 or item.category == "move" or item.category == "range" or item.category == "salvage") and "stats" or "weapons")
+        -- 支援技能和阵营武器使用专属标签；阵营商品还显示攻击类型标签。
         local tagsMarkup = item.type == "supportSkill"
             and '<div class="shop-item-tags"><span class="shop-attack-tag">支援技能</span></div>' or ""
         if factionWeapon then
+            -- 阵营武器卡片额外显示阵营、拥有/装备状态及装备/卸下按钮。
             local tags = { "<span class=\"shop-faction-tag\">" .. item.factionLabel .. "专属</span>" }
             for _, tag in ipairs(item.tags or {}) do
                 tags[#tags + 1] = '<span class="shop-attack-tag">' .. tag .. '</span>'
@@ -626,6 +661,7 @@ local function refreshShopItems()
                 stateText, item.factionLabel, item.id,
                 equipAllowed and "" or " disabled", equipText)
         end
+        -- 只在展示状态变化时重建 DOM，避免刷新造成点击丢失。
         signatureParts[#signatureParts + 1] = table.concat({
             item.id,
             tostring(level),
@@ -643,36 +679,33 @@ local function refreshShopItems()
             item.id, item.category or "default", disabledClass, item.icon, item.name, level, item.maxLevel,
             tagsMarkup, weaponStateMarkup, item.desc, item.shortfall or "", costText
         )
-        columnItemIds[column][#columnItemIds[column] + 1] = item.id
         end
     end
-    local function makeColumn(title, items, columnClass, columnId, scrollId)
-        return '<div id="' .. columnId .. '" class="shop-column ' .. columnClass .. '"><div class="shop-column-title">' .. title .. '</div>'
-            .. '<div id="' .. scrollId .. '" class="shop-column-scroll">' .. table.concat(items) .. '</div></div>'
+    local function makeSection(title, items)
+        -- 每行最多三张卡片，三类商品分别生成独立标题和行容器。
+        local markup = { '<div class="shop-section-title">' .. title .. '</div>' }
+        for index = 1, #items, 3 do
+            markup[#markup + 1] = '<div class="shop-row">'
+                .. table.concat(items, "", index, math.min(index + 2, #items)) .. '</div>'
+        end
+        return table.concat(markup)
     end
     -- 商店暂停期间金属和等级通常不变。只有卡片状态真正变化时才重建 DOM，
     -- 避免鼠标按下与松开之间元素被 inner_rml 替换而丢失 click 事件。
     local renderSignature = table.concat(signatureParts, "|")
     if renderSignature == widgetState.shopRenderSignature then return end
-    local savedScroll = widgetState.pendingShopScroll or {}
-    for _, scrollId in ipairs({ "shop-scroll-stats", "shop-scroll-weapons", "shop-scroll-faction" }) do
-        local scroll = widgetState.document:GetElementById(scrollId)
-        if scroll and savedScroll[scrollId] == nil then savedScroll[scrollId] = scroll.scroll_top or 0 end
-    end
-    widgetState.pendingShopScroll = savedScroll
+    local scrollTop = scroll.scroll_top or 0
     widgetState.shopRenderSignature = renderSignature
     widgetState.shopPurchasable = purchasable
     widgetState.shopEquippable = equippable
     widgetState.shopDisabledReasons = disabledReasons
     widgetState.shopEquipDisabledReasons = equipDisabledReasons
     local factionConfig = faction and factionWeaponCatalog.factions[faction]
-    container.inner_rml = makeColumn("属性", columnItems.stats, "shop-column-stats", "shop-column-stats", "shop-scroll-stats")
-        .. makeColumn("武器", columnItems.weapons, "shop-column-weapons", "shop-column-weapons", "shop-scroll-weapons")
-        .. makeColumn("阵营武器 · " .. (factionConfig and factionConfig.label or "未识别"), columnItems.faction, "shop-column-faction", "shop-column-faction", "shop-scroll-faction")
-    widgetState.shopLayoutColumnWidth = 0
-    widgetState.shopLayoutScrollWidths = {}
-    widgetState.shopLayoutCardWidths = {}
-    widgetState.shopColumnItemIds = columnItemIds
+    scroll.inner_rml = makeSection("属性", columnItems.stats)
+        .. makeSection("武器", columnItems.weapons)
+        .. makeSection("阵营武器 · " .. (factionConfig and factionConfig.label or "未识别"), columnItems.faction)
+    scroll.scroll_top = scrollTop
+    widgetState.shopLayoutCardWidth = 0
     widgetState.shopRenderedItemIds = renderedItemIds
     widgetState.shopRenderedEquipIds = renderedEquipIds
     widgetState.shopBoundCardIds = {}
@@ -681,89 +714,33 @@ local function refreshShopItems()
     bindShopItemClicks()
 end
 
-local SHOP_COLUMNS = {
-    { columnId = "shop-column-stats", scrollId = "shop-scroll-stats", itemKey = "stats" },
-    { columnId = "shop-column-weapons", scrollId = "shop-scroll-weapons", itemKey = "weapons" },
-    { columnId = "shop-column-faction", scrollId = "shop-scroll-faction", itemKey = "faction" },
-}
-
 local function layoutShopCards()
+    -- 用实际滚动区域宽度计算三列卡片宽度，适配窗口缩放和 DPI。
     if not widgetState.shopOpen or not widgetState.document then return end
     local container = widgetState.document:GetElementById("shop-items")
     local containerWidth = container and container.client_width or 0
     if containerWidth < 200 then return end -- hidden documents have no usable layout yet
 
     local dpRatio = (widgetState.rmlContext and widgetState.rmlContext.dp_ratio) or 1
-    local gap = 12 * dpRatio -- must match .shop-items gap in RCSS
-    local columnWidth = math.floor((containerWidth - 2 * gap) / 3) - 1
-    if columnWidth < 60 then return end
-
-    -- RmlUi may shrink nested flex children to their text width. Give each column
-    -- a definite pixel width from the already laid out parent before sizing cards.
-    if widgetState.shopLayoutColumnWidth ~= columnWidth then
-        local widthStyle = columnWidth .. "px"
-        for _, config in ipairs(SHOP_COLUMNS) do
-            local column = widgetState.document:GetElementById(config.columnId)
-            if column then column.style.width = widthStyle end
+    local scroll = widgetState.document:GetElementById("shop-scroll")
+    if not scroll then return end
+    local scrollWidth = math.floor(scroll.client_width or 0)
+    if scrollWidth < 200 then return end
+    local gap = 10 * dpRatio -- must match .shop-row gap in RCSS
+    local cardWidth = math.floor((scrollWidth - 2 * gap - 18 * dpRatio) / 3)
+    if cardWidth < 60 then return end
+    if widgetState.shopLayoutCardWidth ~= cardWidth then
+        local widthStyle = cardWidth .. "px"
+        for _, itemId in ipairs(widgetState.shopRenderedItemIds or {}) do
+            local card = widgetState.document:GetElementById("shop-item-" .. itemId)
+            if card then card.style.width = widthStyle end
         end
-        widgetState.shopLayoutColumnWidth = columnWidth
-        widgetState.shopLayoutScrollWidths = {}
-        widgetState.shopLayoutCardWidths = {}
-        return -- read the scroll containers after RmlUi has laid out the new widths
-    end
-
-    local layoutChangedThisFrame = false
-    for index, config in ipairs(SHOP_COLUMNS) do
-        local column = widgetState.document:GetElementById(config.columnId)
-        local scroll = widgetState.document:GetElementById(config.scrollId)
-        local measuredColumnWidth = column and column.offset_width or 0
-        local scrollWidthChanged = false
-        if scroll and measuredColumnWidth > 40 then
-            -- The column has a 1dp border and 6dp padding on each side.
-            -- Assign an explicit scroll width so it cannot shrink to text width.
-            local targetScrollWidth = math.max(40, math.floor(measuredColumnWidth - 14 * dpRatio))
-            if widgetState.shopLayoutScrollWidths[index] ~= targetScrollWidth then
-                scroll.style.width = targetScrollWidth .. "px"
-                widgetState.shopLayoutScrollWidths[index] = targetScrollWidth
-                widgetState.shopLayoutCardWidths[index] = nil
-                scrollWidthChanged = true
-                layoutChangedThisFrame = true
-            end
-        end
-        -- client_width excludes a visible vertical scrollbar. Use offset_width
-        -- so long lists keep the same card width as the short faction list;
-        -- the scrollbar is overlaid into the column's 6dp right gutter in RCSS.
-        local scrollWidth = scroll and scroll.offset_width or 0
-        if scrollWidth > 40 and not scrollWidthChanged then
-            -- The scroll container has no horizontal padding or border.
-            local cardWidth = math.floor(scrollWidth) - 2
-            if widgetState.shopLayoutCardWidths[index] ~= cardWidth then
-                local widthStyle = cardWidth .. "px"
-                for _, itemId in ipairs((widgetState.shopColumnItemIds and widgetState.shopColumnItemIds[config.itemKey]) or {}) do
-                    local card = widgetState.document:GetElementById("shop-item-" .. itemId)
-                    if card then card.style.width = widthStyle end
-                end
-                widgetState.shopLayoutCardWidths[index] = cardWidth
-                layoutChangedThisFrame = true
-            end
-        end
-    end
-    if widgetState.pendingShopScroll and not layoutChangedThisFrame then
-        local allReady = true
-        for _, scrollId in ipairs({ "shop-scroll-stats", "shop-scroll-weapons", "shop-scroll-faction" }) do
-            local scroll = widgetState.document:GetElementById(scrollId)
-            if not scroll or (scroll.client_height or 0) <= 0 then
-                allReady = false
-                break
-            end
-            local maxScroll = math.max(0, (scroll.scroll_height or 0) - scroll.client_height)
-            scroll.scroll_top = math.min(widgetState.pendingShopScroll[scrollId] or 0, maxScroll)
-        end
-        if allReady then widgetState.pendingShopScroll = nil end
+        widgetState.shopLayoutCardWidth = cardWidth
     end
 end
 
 local function refreshShopItemsSafely()
+    -- 防止单次商店渲染异常移除整个 Widget；同一异常只回报一次。
     local ok, err = pcall(refreshShopItems)
     if not ok then
         if not widgetState.shopRenderError then
@@ -779,6 +756,7 @@ local function refreshShopItemsSafely()
 end
 
 local function toggleShop()
+    -- 切换商店遮罩，并同步单人暂停与建造菜单输入状态。
     widgetState.shopOpen = not widgetState.shopOpen
     widgetState.pauseReasons.shop = widgetState.shopOpen
     updatePauseState()
@@ -806,6 +784,7 @@ local function handleCloseShop()
 end
 
 handleBuyShopItem = function(itemId)
+    -- UI 只发送商品 ID；是否有钱、是否解锁均由 synced Gadget 判定。
     personalRequest("roguelike_shop", itemId)
 end
 
@@ -833,6 +812,7 @@ function widget:Initialize()
 	end
 
 	local dm = widgetState.rmlContext:OpenDataModel(MODEL_NAME, modelData, self)
+	-- 数据模型必须先创建，随后加载的 RML 文档才能绑定字段。
 	if not dm then
 		return false
 	end
@@ -889,6 +869,7 @@ function widget:Initialize()
 	widgetState.lastSyncRequestTime = os.clock()
 
     for index = 0, 2 do
+        -- 将三张卡片分别映射到 Lua 下标为 1–3 的候选。
         local cardIndex = index
         local card = widgetState.document:GetElementById("upgrade-card-" .. cardIndex)
         if card then
@@ -899,6 +880,7 @@ function widget:Initialize()
         end
     end
     local refreshButton = widgetState.document:GetElementById("upgrade-refresh")
+    -- 重抽和跳过携带当前 choiceId；移除按钮先等待玩家指定卡牌。
     if refreshButton then refreshButton:AddEventListener("click", function(event)
         if widgetState.upgradeActive and widgetState.refreshesRemaining > 0 then
             spSendLuaRulesMsg("roguelike_refresh:" .. widgetState.choiceId)
@@ -934,6 +916,7 @@ function widget:Initialize()
         shopItems:AddEventListener("click", handleShopItemsClick, false)
     end
     local skillActions = { "nanorepair", "thruster", "faction", "medical_beacon" }
+    -- 技能按钮通过个人请求通道提交动作，冷却/资源限制由同步逻辑处理。
     for _, skillID in ipairs(skillActions) do
         local button = widgetState.document:GetElementById("skill-" .. skillID)
         if button then
@@ -957,6 +940,7 @@ end
 
 -- 接收 Gadget 通过 Script.LuaUI 发送的事件
 function widget:RoguelikeShowChoices(choiceId, choicesStr, refreshes, skips, banishes)
+    -- synced 端把候选编码为“候选;候选”，每项包含 ID、名称、描述和图标。
     local choices = {}
     for choiceStr in choicesStr:gmatch("([^;]+)") do
         local parts = {}
@@ -976,10 +960,12 @@ function widget:RoguelikeShowChoices(choiceId, choicesStr, refreshes, skips, ban
 end
 
 local function escapeRmlText(value)
+    -- 将名称/描述中的特殊字符转义，避免插入 inner_rml 时被当作标签。
     return tostring(value or ""):gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
 end
 
 function widget:RoguelikeUpgradeList(list)
+    -- 同步已拥有升级列表，刷新浮动面板；这是断线/重载后恢复显示的依据。
     local content = widgetState.document and widgetState.document:GetElementById("owned-upgrades-content")
     if not content then return end
 	widgetState.syncPending = false
@@ -1007,6 +993,7 @@ function widget:RoguelikeUpgradeNotification(name, desc)
 end
 
 function widget:RoguelikeShopResult(success, itemId, name, level, cost, reason)
+    -- 用服务器确认结果更新本地提示；购买成功等级先缓存到 RulesParam 可见为止。
     if tonumber(success) == 1 then
 		widgetState.shopObservedLevels[itemId] = math.max(
 			widgetState.shopObservedLevels[itemId] or 0, tonumber(level) or 0)
@@ -1041,12 +1028,12 @@ function widget:RoguelikeShopResult(success, itemId, name, level, cost, reason)
         addNotification("购买失败：无法完成购买")
     end
     if widgetState.shopOpen then
-        widgetState.shopRenderSignature = nil
         refreshShopItemsSafely()
     end
 end
 
 function widget:RoguelikeSkillResult(success, skillID, cooldownFrame, reason)
+    -- 把权威技能结果与失败原因映射为玩家可读的本地通知。
 	local labels = {
 		nanorepair = "紧急纳米修复", thruster = "应急推进", photon_guard = "光子缓冲",
 		bastion = "重装强固", repair_link = "纳米协同修复", medical_beacon = "治疗信标",
@@ -1085,12 +1072,14 @@ end
 
 -- 定期刷新 HUD 数据
 local function optionsDialogOpen()
+    -- 大厅覆盖层、隐藏 GUI 或选项面板打开时暂时隐藏肉鸽界面。
     return widgetState.lobbyHidden
         or (Spring.IsGUIHidden and Spring.IsGUIHidden())
         or (WG.options and WG.options.isvisible and WG.options.isvisible()) or false
 end
 
 local function isPointOverUpgradeList(x, y)
+    -- Spring 鼠标坐标从屏幕下方起算；RML 顶边偏移需按视口高度换算。
     local doc = widgetState.document
     local element = doc and doc:GetElementById("owned-upgrades")
     if not element or optionsDialogOpen() then return false end
@@ -1102,6 +1091,7 @@ local function isPointOverUpgradeList(x, y)
 end
 
 local function syncOptionsVisibility()
+    -- 逐个更新 HUD、卡牌、商店等节点的 hidden 类，保留原有打开状态。
     local optionsOpen = optionsDialogOpen()
     local doc = widgetState.document
     if not doc then return end
@@ -1117,6 +1107,7 @@ local function syncOptionsVisibility()
     end
 end
 function widget:Update(dt)
+    -- 每帧处理动态节点事件绑定、布局和拖动；较重的数据读取按间隔执行。
     if widgetState.shopBindingsPending and widgetState.document then
         bindShopItemClicks()
     end
@@ -1134,6 +1125,7 @@ function widget:Update(dt)
     if widgetState.upgradeListDrag then widgetState.upgradeListDrag.tick() end
     local now = os.clock()
 	if widgetState.syncPending and now - widgetState.lastSyncRequestTime >= 3 then
+		-- 重载后尚未收到完整同步结果时，每三秒重发一次状态请求。
 		spSendLuaRulesMsg("roguelike_sync")
 		widgetState.lastSyncRequestTime = now
 	end
@@ -1155,6 +1147,8 @@ function widget:Update(dt)
     local comID = findCommander()
     if not comID then return end
 
+    -- 波次、属性、护盾和阶段都从当前指挥官的 UnitRulesParam 读取。
+    -- 这些值由 synced Gadget 写入，此处只格式化与展示。
     local wave       = spGetUnitRulesParam(comID, "roguelike_wave") or 0
     local kills      = spGetUnitRulesParam(comID, "roguelike_kills") or 0
     local atkMult    = spGetUnitRulesParam(comID, "roguelike_reload_mult") or 1.0
@@ -1196,15 +1190,12 @@ function widget:Update(dt)
     dm.metal = math.floor(metal)
     dm.shield = string.format("%d / %d", math.floor(shieldCurrent), math.floor(shieldCapacity))
     dm.barrier = string.format("%d", math.floor(barrierCurrent))
-	local lifeDrain = tonumber(spGetUnitRulesParam(comID, "roguelike_lifedrain_rate") or 0) or 0
-	local hitRepair = tonumber(spGetUnitRulesParam(comID, "roguelike_hit_repair_fraction") or 0) or 0
-	local areaLeech = tonumber(spGetUnitRulesParam(comID, "roguelike_aoe_leech_coefficient") or 0) or 0
-	local dotLeech = tonumber(spGetUnitRulesParam(comID, "roguelike_dot_leech_coefficient") or 0) or 0
-	dm.healBuild = string.format("吸血%.0f%% 命中%.2f%%/次%s%s", lifeDrain * 100, hitRepair * 100,
-		areaLeech > 0 and string.format(" 范围%.0f%%", areaLeech * 100) or "",
-		dotLeech > 0 and string.format(" 持续%.0f%%", dotLeech * 100) or "")
+    local stealChance = tonumber(spGetUnitRulesParam(comID, "roguelike_lifesteal_chance") or 0) or 0
+    local damageSteal = tonumber(spGetUnitRulesParam(comID, "roguelike_damage_lifesteal") or 0) or 0
+    dm.healBuild = string.format("偷取 %.0f%% | 吸取 %.0f%%伤害", stealChance * 100, damageSteal * 100)
 	local unitDef = UnitDefs[spGetUnitDefID(comID)]
 	local commanderName = unitDef and string.lower(unitDef.name or "") or ""
+	-- 根据指挥官阵营选择技能名称和对应冷却状态。
 	local factionSkill = commanderName:sub(1, 3) == "arm" and "photon_guard"
 		or commanderName:sub(1, 3) == "cor" and "bastion"
 		or commanderName:sub(1, 3) == "leg" and "repair_link" or nil
@@ -1212,6 +1203,7 @@ function widget:Update(dt)
 	local factionName = doc:GetElementById("skill-faction-name")
 	if factionName then factionName.inner_rml = skillNames[factionSkill] or "阵营技能" end
 	local function updateSkillStatus(skillID, activeParam, activeLabel)
+		-- 冷却以游戏帧保存，显示时换算为秒；生效中的技能优先显示状态。
 		local button = doc:GetElementById("skill-" .. skillID)
 		local status = doc:GetElementById("skill-status-" .. skillID)
 		if not button or not status then return end
@@ -1256,6 +1248,7 @@ function widget:Update(dt)
     end
     dm.topUnits = string.format("敌军 %d", math.max(0, math.floor(enemiesAlive)))
     local roleLevel = comID and (spGetUnitRulesParam(comID, "roguelike_level") or 1) or 1
+    -- 角色经验与伤害倍率用于顶栏；达到等级上限时显示 MAX。
     local roleLevelMax = comID and (spGetUnitRulesParam(comID, "roguelike_level_max") or 60) or 60
     local roleXP = comID and (spGetUnitRulesParam(comID, "roguelike_role_xp") or 0) or 0
     local nextRoleXP = comID and (spGetUnitRulesParam(comID, "roguelike_role_next_xp") or -1) or -1
@@ -1270,6 +1263,7 @@ function widget:Update(dt)
     widgetState.phase = phase
 
     local barValues = {
+        -- 属性条使用与文字倍率相同的 RulesParam，避免两处显示不一致。
         atk = percentBar(atkMult, 2.0),
         spd = percentBar(spdMult, 2.0),
         hp = percentBar(hpMult, 2.5),
@@ -1295,6 +1289,7 @@ end
 
 -- 键盘
 function widget:KeyPress(key, mods, isRepeat)
+    -- 1/2/3 选择卡牌，F1 切换商店，Esc 关闭商店。
     if optionsDialogOpen() then return false end
     if widgetState.upgradeActive then
         if key == 49 then handlePickUpgrade(0); return true end  -- 1
@@ -1346,6 +1341,7 @@ function widget:MouseWheel(up, value)
 end
 
 function widget:Shutdown()
+	-- 卸载时撤销输入隔离和本地暂停，并解除所有全局回调及 RML 对象。
 	widgetState.upgradeActive = false
 	widgetState.shopOpen = false
 	syncBuildMenuSuppression()
@@ -1372,9 +1368,8 @@ function widget:Shutdown()
     widgetState.rmlContext = nil
 end
 
--- Chobby announces when its room/setup overlay covers the running game. Hide
--- the whole Rml document while that overlay is active so it cannot draw over
--- room controls; restore it when the player returns to the game.
+-- Chobby 房间/设置覆盖层出现时隐藏整份 RML 文档，避免遮挡房间控件；
+-- 返回游戏时恢复文档，并重新同步各界面的可见状态。
 function widget:RecvLuaMsg(message, playerID)
     if type(message) ~= "string" or not widgetState.document then return false end
     if message:sub(1, 19) == "LobbyOverlayActive1" then

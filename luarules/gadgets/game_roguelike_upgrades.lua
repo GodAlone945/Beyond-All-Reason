@@ -207,36 +207,28 @@ local function moduleDescription(kind, value, total)
 end
 
 local UPGRADE_POOL = {
-	{ id = "armor1", name = "复合装甲 I", desc = "+8% 伤害减免", type = "armor", value = 0.08, tier = 1, icon = "护甲", category = "defense" },
-	{ id = "shield1", name = "能量护盾 I", desc = "+2000 护盾，消耗电力充能", type = "shield", value = 2000, tier = 1, icon = "护盾", category = "defense" },
+	{ id = "armor1", name = "复合装甲 I", desc = "减伤 +8%", type = "armor", value = 0.08, tier = 1, icon = "护甲", category = "defense" },
+	{ id = "shield1", name = "能量护盾 I", desc = "护盾 +2000", type = "shield", value = 2000, tier = 1, icon = "护盾", category = "defense" },
 
-	{ id = "armor2", name = "复合装甲 II", desc = "+12% 伤害减免", type = "armor", value = 0.12, tier = 2, icon = "护甲", category = "defense" },
-	{ id = "shield2", name = "能量护盾 II", desc = "+3500 护盾容量", type = "shield", value = 3500, tier = 2, icon = "护盾", requires = "shield1", category = "defense" },
-	-- 第一阶段在第二波时间边界、第三波开始前自动授予；后续阶段才进入候选池。
-	{ id = "drone1", name = "轨道无人机 I", desc = "第二波时间结束、第三波开始时自动解锁 2 架无人机", type = "drone", value = 1, tier = 1, icon = "无人机", autoUnlock = true },
-
-	{ id = "armor3", name = "相位装甲", desc = "+18% 伤害减免", type = "armor", value = 0.18, tier = 3, icon = "护甲", category = "defense" },
-	{ id = "shield3", name = "能量护盾 III", desc = "+5000 护盾容量", type = "shield", value = 5000, tier = 3, icon = "护盾", requires = "shield2", category = "defense" },
-	{ id = "drone2", name = "轨道无人机 II", desc = "+2 架无人机", type = "drone", value = 1, tier = 1, icon = "无人机", weight = 1.6, requires = "drone1" },
-	{ id = "drone3", name = "轨道无人机 III", desc = "+2 架无人机", type = "drone", value = 1, tier = 1, icon = "无人机", weight = 1.6, requires = "drone2" },
-	{ id = "drone4", name = "轨道无人机 IV", desc = "+2 架无人机（最多 8 架）", type = "drone", value = 1, tier = 1, icon = "无人机", weight = 1.6, requires = "drone3" },
-	{ id = "blood_recycle1", name = "战利品回收 I", desc = "550 范围内队伍击杀恢复 0.6% 最大生命，内置冷却 2 秒", type = "bloodRecycle", value = 0.006, tier = 1, icon = "生命", weight = 0.8 },
-	{ id = "blood_recycle2", name = "战利品回收 II", desc = "击杀恢复提高至 0.8% 最大生命，内置冷却仍为 2 秒", type = "bloodRecycle", value = 0.008, tier = 2, icon = "生命", weight = 0.8, requires = "blood_recycle1" },
-	{ id = "rl_card_lifedrain", name = "能量汲取 I", desc = "吸血率 0% → 12%：合格直接有效伤害转为治疗；触发型治疗共用 0.6% 最大生命/秒上限", type = "lifeDrain", value = 0.12, tier = 1, icon = "生命", weight = 0.8, category = "defense" },
-	{ id = "rl_card_lifedrain2", name = "能量汲取 II", desc = "吸血率 12% → 18%；仍受触发型治疗上限约束", type = "lifeDrain", value = 0.18, tier = 2, icon = "生命", weight = 0.8, requires = "rl_card_lifedrain", category = "defense" },
-	{ id = "rl_card_hit_repair", name = "纳米回馈 I", desc = "命中回复 0% → 0.12% 最大生命/次；同一目标 0.25 秒限一次，与吸血共用上限", type = "hitRepair", value = 0.0012, tier = 1, icon = "生命", weight = 0.7, category = "defense" },
-	{ id = "rl_card_hit_repair2", name = "纳米回馈 II", desc = "命中回复 0.12% → 0.20% 最大生命；同一目标 0.25 秒限一次", type = "hitRepair", value = 0.0020, tier = 2, icon = "生命", weight = 0.7, requires = "rl_card_hit_repair", category = "defense" },
-	{ id = "rl_trait_aoe_leech", name = "范围汲取 I", desc = "解锁爆炸/溅射吸血：有效生命伤害的 20%，仍受治疗上限约束", type = "areaLeech", value = 0.20, tier = 2, icon = "生命", weight = 0.45, requires = "rl_card_lifedrain", category = "defense" },
-	{ id = "rl_trait_aoe_leech2", name = "范围汲取 II", desc = "范围吸血系数 20% → 25%", type = "areaLeech", value = 0.25, tier = 3, icon = "生命", weight = 0.35, requires = "rl_trait_aoe_leech", category = "defense" },
-	{ id = "rl_trait_dot_leech", name = "持续汲取 I", desc = "解锁燃烧/持续伤害吸血：有效生命伤害的 10%，按持续治疗预算结算", type = "dotLeech", value = 0.10, tier = 2, icon = "生命", weight = 0.4, requires = "rl_card_lifedrain", category = "defense" },
-	{ id = "rl_trait_dot_leech2", name = "持续汲取 II", desc = "持续伤害吸血系数 10% → 15%", type = "dotLeech", value = 0.15, tier = 3, icon = "生命", weight = 0.3, requires = "rl_trait_dot_leech", category = "defense" },
-	{ id = "blast_lining1", name = "防爆夹层 I", desc = "指定自爆威胁造成的伤害降低 20%", type = "blastLining", value = 0.20, tier = 1, icon = "护甲", weight = 0.8, category = "defense" },
-	{ id = "blast_lining2", name = "防爆夹层 II", desc = "指定自爆威胁造成的伤害降低提高至 30%", type = "blastLining", value = 0.30, tier = 2, icon = "护甲", weight = 0.8, requires = "blast_lining1", category = "defense" },
+	{ id = "armor2", name = "复合装甲 II", desc = "减伤 +12%", type = "armor", value = 0.12, tier = 2, icon = "护甲", category = "defense" },
+	{ id = "shield2", name = "能量护盾 II", desc = "护盾 +3500", type = "shield", value = 3500, tier = 2, icon = "护盾", requires = "shield1", category = "defense" },
+	{ id = "armor3", name = "相位装甲", desc = "减伤 +18%", type = "armor", value = 0.18, tier = 3, icon = "护甲", category = "defense" },
+	{ id = "shield3", name = "能量护盾 III", desc = "护盾 +5000", type = "shield", value = 5000, tier = 3, icon = "护盾", requires = "shield2", category = "defense" },
+	{ id = "blood_recycle1", name = "战利品回收 I", desc = "击杀回复 0.6% 最大生命", type = "bloodRecycle", value = 0.006, tier = 1, icon = "生命", weight = 0.8 },
+	{ id = "blood_recycle2", name = "战利品回收 II", desc = "击杀回复 0.8% 最大生命", type = "bloodRecycle", value = 0.008, tier = 2, icon = "生命", weight = 0.8, requires = "blood_recycle1" },
+	{ id = "rl_lifesteal1", name = "生命偷取 I", desc = "命中概率 +25%；回复 500 + 5% 最大生命", type = "lifeStealChance", value = 0.25, tier = 1, icon = "生命", weight = 0.8, category = "defense" },
+	{ id = "rl_lifesteal2", name = "生命偷取 II", desc = "命中概率 +25%；回复 500 + 5% 最大生命", type = "lifeStealChance", value = 0.25, tier = 1, icon = "生命", weight = 0.8, requires = "rl_lifesteal1", category = "defense" },
+	{ id = "rl_lifesteal3", name = "生命偷取 III", desc = "命中概率 +25%；回复 500 + 5% 最大生命", type = "lifeStealChance", value = 0.25, tier = 1, icon = "生命", weight = 0.8, requires = "rl_lifesteal2", category = "defense" },
+	{ id = "rl_lifesteal4", name = "生命偷取 IV", desc = "命中概率 +25%；回复 500 + 5% 最大生命", type = "lifeStealChance", value = 0.25, tier = 1, icon = "生命", weight = 0.8, requires = "rl_lifesteal3", category = "defense" },
+	{ id = "rl_lifesteal5", name = "生命偷取 V", desc = "命中概率 +25%；回复 500 + 5% 最大生命", type = "lifeStealChance", value = 0.25, tier = 1, icon = "生命", weight = 0.8, requires = "rl_lifesteal4", category = "defense" },
+	{ id = "blast_lining1", name = "防爆夹层 I", desc = "自爆伤害 -20%", type = "blastLining", value = 0.20, tier = 1, icon = "护甲", weight = 0.8, category = "defense" },
+	{ id = "blast_lining2", name = "防爆夹层 II", desc = "自爆伤害 -30%", type = "blastLining", value = 0.30, tier = 2, icon = "护甲", weight = 0.8, requires = "blast_lining1", category = "defense" },
 }
 
 -- 商店定义由 synced 端持有并验证；LuaUI 中的同名表只负责展示。
 local SHOP_ITEMS = {
 	damage  = { id = "damage", name = "武器强化", desc = "+2% 武器伤害", baseCost = 80, costStep = 60, maxLevel = 20, type = "damage", value = 1.02 },
+	absorb = { id = "absorb", name = "吸取", desc = "每次命中恢复攻击伤害的 5%", baseCost = 250, costStep = 200, maxLevel = 10, type = "damageLifesteal", value = 0.05 },
 	health  = { id = "health", name = "装甲强化", desc = "+10% 最大生命值", baseCost = 100, costStep = 75, maxLevel = 20, type = "healthPercent", value = 0.10 },
 	regen   = { id = "regen", name = "纳米修复", desc = "开局准备或脱战额外回复 +0.30% 最大生命/秒，购买后回满生命", baseCost = 250, costStep = 220, maxLevel = 5, type = "regenPercent", value = 0.003 },
 	reload  = { id = "reload", name = "冷却强化", desc = "+8% 攻击速度", baseCost = 120, costStep = 90, maxLevel = 15, type = "reload", value = 1.08 },
@@ -246,9 +238,12 @@ local SHOP_ITEMS = {
 	salvage_speed = { id = "salvage_speed", name = "快速回收", desc = "+15% 残骸吸收速度", baseCost = 100, costStep = 80, maxLevel = 10, type = "salvageSpeed", value = 1.15 },
 	lightning_weapon = { id = "lightning_weapon", name = "雷霆步枪", desc = "解锁近程连锁闪电武器", baseCost = 1200, costStep = 0, maxLevel = 1, type = "weapon", weaponNum = 5 },
 	plasma_weapon = { id = "plasma_weapon", name = "Tzar 重型主炮", desc = "解锁 Cortex Tzar 的 1100 伤害重型主炮", baseCost = 1800, costStep = 0, maxLevel = 1, type = "weapon", weaponNum = 6 },
+	multishot = { id = "multishot", name = "多重射击", desc = "每级增加两枚同帧弹丸", baseCost = 100, costStep = 100, maxLevel = 4, type = "multishot" },
+	drone_swarm = { id = "drone_swarm", name = "轨道无人机", desc = "每级购买并召唤 2 架无人机，最多 8 架", baseCost = 900, costStep = 700, maxLevel = 4, type = "drone" },
 	sniper_weapon = { id = "sniper_weapon", name = "湮灭狙击光束", desc = "解锁高伤害远程单体武器", baseCost = 2800, costStep = 0, maxLevel = 1, type = "weapon", weaponNum = 7 },
 	barrage_weapon = { id = "barrage_weapon", name = "凝固汽油覆盖炮", desc = "解锁超远程范围覆盖打击", baseCost = 2700, costStep = 0, maxLevel = 1, type = "weapon", weaponNum = 8 },
 	shockwave_weapon = { id = "shockwave_weapon", name = "冲击清场炮", desc = "解锁击退与清杂范围武器", baseCost = 2200, costStep = 0, maxLevel = 1, type = "weapon", weaponNum = 9 },
+	electric_orb = { id = "electric_orb", name = "电球", desc = "解锁 ARM 电球；命中后有概率传导至附近敌人", baseCost = 100, costStep = 0, maxLevel = 1, type = "weapon", weaponNum = 13, prototypeFaction = "armada" },
 	meteor_weapon = { id = "meteor_weapon", name = "陨星自动打击", desc = "自动锁定并召下陨石；Lv.2 落地灼烧，Lv.3 增加数量，Lv.4 分裂", baseCost = 2200, costStep = 1200, maxLevel = 4, type = "supportSkill" },
 	lightning_extension = { id = "lightning_extension", name = "超导分叉", desc = "连锁范围、目标数与直击伤害强化", baseCost = 900, costStep = 600, maxLevel = 3, type = "weaponExtension", requires = "lightning_weapon" },
 	plasma_extension = { id = "plasma_extension", name = "裂变弹头", desc = "强化 Tzar 主炮直击与溅射伤害；解锁余震重击", baseCost = 1100, costStep = 750, maxLevel = 3, type = "weaponExtension", requires = "plasma_weapon" },
@@ -357,10 +352,8 @@ local cumulativeMultipliers = {
 	salvageRadius = BASE_SALVAGE_RADIUS,
 	combatRegen = 0,
 	bloodRecycle = 0,
-	lifeDrain = 0,
-	hitRepair = 0,
-	areaLeech = 0,
-	dotLeech = 0,
+	lifeStealChance = 0,
+	damageLifesteal = 0,
 	blastLining = 0,
 }
 local summonMultipliers = {
@@ -409,7 +402,6 @@ local damageHealBudgetSecond = -1
 local damageHealBudgetUsed = 0
 local healingTotals = {}
 local lastBloodRecycleFrame = -Game.gameSpeed * 100
-local lastHitRepairByTarget = {}
 local damageHealRecentEvents = {}
 local lastDamageHealCleanupFrame = 0
 local pendingDamageByTarget = {}
@@ -454,7 +446,7 @@ local function selectTeam(teamID)
 			medicalBeaconCooldownEndFrame = 0, healBudgetSecond = -1, healBudgetUsed = 0,
 			damageHealBudgetSecond = -1, damageHealBudgetUsed = 0,
 			healingTotals = {}, lastBloodRecycleFrame = -Game.gameSpeed * 100,
-			lastHitRepairByTarget = {}, damageHealRecentEvents = {}, lastDamageHealCleanupFrame = 0,
+			damageHealRecentEvents = {}, lastDamageHealCleanupFrame = 0,
 			nextMedkitPickupFrame = 0,
 		}
 		statesByTeam[teamID] = state
@@ -492,7 +484,6 @@ local function selectTeam(teamID)
 	healBudgetSecond, healBudgetUsed = state.healBudgetSecond, state.healBudgetUsed
 	damageHealBudgetSecond, damageHealBudgetUsed = state.damageHealBudgetSecond or -1, state.damageHealBudgetUsed or 0
 	healingTotals, lastBloodRecycleFrame = state.healingTotals, state.lastBloodRecycleFrame
-	lastHitRepairByTarget = state.lastHitRepairByTarget or {}
 	damageHealRecentEvents = state.damageHealRecentEvents or {}
 	lastDamageHealCleanupFrame = state.lastDamageHealCleanupFrame or 0
 	nextMedkitPickupFrame = state.nextMedkitPickupFrame
@@ -528,7 +519,6 @@ local function storeTeam(state)
 	state.healBudgetSecond, state.healBudgetUsed = healBudgetSecond, healBudgetUsed
 	state.damageHealBudgetSecond, state.damageHealBudgetUsed = damageHealBudgetSecond, damageHealBudgetUsed
 	state.healingTotals, state.lastBloodRecycleFrame = healingTotals, lastBloodRecycleFrame
-	state.lastHitRepairByTarget = lastHitRepairByTarget
 	state.damageHealRecentEvents = damageHealRecentEvents
 	state.lastDamageHealCleanupFrame = lastDamageHealCleanupFrame
 	state.nextMedkitPickupFrame = nextMedkitPickupFrame
@@ -815,6 +805,7 @@ local function writeProgressRules(unitID)
 	-- 休整阶段的额外回复；UI/诊断可据此区分“脱战回复”和“休整回复”。
 	Spring.SetUnitRulesParam(unitID, "roguelike_recovery_heal_rate", RECOVERY_HEAL_PER_SECOND, INLOS_ACCESS)
 	Spring.SetUnitRulesParam(unitID, "roguelike_damage_mult", effectiveDamageMultiplier(), INLOS_ACCESS)
+	Spring.SetUnitRulesParam(unitID, "roguelike_multishot_count", 1 + 2 * (shopLevels.multishot or 0), INLOS_ACCESS)
 	Spring.SetUnitRulesParam(unitID, "roguelike_range_mult", cumulativeMultipliers.range * effectiveStatMultiplier("range"), INLOS_ACCESS)
 	Spring.SetUnitRulesParam(unitID, "roguelike_sight_mult", cumulativeMultipliers.sight, INLOS_ACCESS)
 	Spring.SetUnitRulesParam(unitID, "roguelike_armor_reduction", cumulativeMultipliers.armor, INLOS_ACCESS)
@@ -823,10 +814,8 @@ local function writeProgressRules(unitID)
 	Spring.SetUnitRulesParam(unitID, "roguelike_shield_energy_per_point", SHIELD_ENERGY_PER_POINT, INLOS_ACCESS)
 	Spring.SetUnitRulesParam(unitID, "roguelike_combat_regen", effectiveCombatRegen(), INLOS_ACCESS)
 	Spring.SetUnitRulesParam(unitID, "roguelike_blood_recycle", cumulativeMultipliers.bloodRecycle, INLOS_ACCESS)
-	Spring.SetUnitRulesParam(unitID, "roguelike_lifedrain_rate", cumulativeMultipliers.lifeDrain, INLOS_ACCESS)
-	Spring.SetUnitRulesParam(unitID, "roguelike_hit_repair_fraction", cumulativeMultipliers.hitRepair, INLOS_ACCESS)
-	Spring.SetUnitRulesParam(unitID, "roguelike_aoe_leech_coefficient", cumulativeMultipliers.areaLeech, INLOS_ACCESS)
-	Spring.SetUnitRulesParam(unitID, "roguelike_dot_leech_coefficient", cumulativeMultipliers.dotLeech, INLOS_ACCESS)
+	Spring.SetUnitRulesParam(unitID, "roguelike_lifesteal_chance", cumulativeMultipliers.lifeStealChance, INLOS_ACCESS)
+	Spring.SetUnitRulesParam(unitID, "roguelike_damage_lifesteal", cumulativeMultipliers.damageLifesteal, INLOS_ACCESS)
 	Spring.SetUnitRulesParam(unitID, "roguelike_damage_heal_cap", DAMAGE_TRIGGER_HEAL_CAP_PER_SECOND, INLOS_ACCESS)
 	Spring.SetUnitRulesParam(unitID, "roguelike_damage_heal_used", damageHealBudgetUsed, INLOS_ACCESS)
 	Spring.SetUnitRulesParam(unitID, "roguelike_blast_lining", cumulativeMultipliers.blastLining, INLOS_ACCESS)
@@ -898,7 +887,7 @@ local HEAL_SOURCES = {
 	passive_regen = true, drone_repair = true, combat_regen = true,
 	blood_recycle = true, medical_beacon = true, leg_repair_link = true,
 	nanorepair = true, medkit = true, wave_clear = true, shop_regen = true,
-	lifesteal = true, hit_repair = true,
+	lifesteal = true, damage_lifesteal = true,
 }
 
 local function healCurrentCommander(source, amount, context)
@@ -960,8 +949,7 @@ local function registerDamageHealContext(targetID, ownerID, damageKind, attackID
 	local teamID = Spring.GetUnitTeam(ownerID)
 	local state = teamID and statesByTeam[teamID]
 	local multipliers = state and state.cumulativeMultipliers
-	if not multipliers or (multipliers.lifeDrain <= 0 and multipliers.hitRepair <= 0
-		and multipliers.areaLeech <= 0 and multipliers.dotLeech <= 0) then return false end
+	if not multipliers or (multipliers.lifeStealChance <= 0 and multipliers.damageLifesteal <= 0) then return false end
 	explicitDamageHealContexts[targetID] = {
 		ownerID = ownerID, teamID = teamID, damageKind = damageKind,
 		attackID = attackID, frame = Spring.GetGameFrame(),
@@ -1108,14 +1096,8 @@ local function applyCardUpgrade(upgrade)
 			cumulativeMultipliers.combatRegen + upgrade.value)
 	elseif upgrade.type == "bloodRecycle" then
 		cumulativeMultipliers.bloodRecycle = upgrade.value
-	elseif upgrade.type == "lifeDrain" then
-		cumulativeMultipliers.lifeDrain = upgrade.value
-	elseif upgrade.type == "hitRepair" then
-		cumulativeMultipliers.hitRepair = upgrade.value
-	elseif upgrade.type == "areaLeech" then
-		cumulativeMultipliers.areaLeech = upgrade.value
-	elseif upgrade.type == "dotLeech" then
-		cumulativeMultipliers.dotLeech = upgrade.value
+	elseif upgrade.type == "lifeStealChance" then
+		cumulativeMultipliers.lifeStealChance = cumulativeMultipliers.lifeStealChance + upgrade.value
 	elseif upgrade.type == "blastLining" then
 		cumulativeMultipliers.blastLining = math.min(BLAST_LINING_LIMIT,
 			math.max(cumulativeMultipliers.blastLining, upgrade.value))
@@ -1148,23 +1130,6 @@ end
 
 -- 第二波结算属于局内里程碑，不算玩家的一次选卡，因此只解锁无人机，
 -- 不叠加“每次升级”的全局基础成长，也不推进卡牌 tier。
-local function unlockFirstDroneMilestone()
-	if acquiredUpgradeIds.drone1 then return false end
-	if not GG.Roguelike or not GG.Roguelike.AddDroneLevel then
-		Spring.Echo("Roguelike: drone milestone delayed because AddDroneLevel is unavailable")
-		return false
-	end
-
-	acquiredUpgradeIds.drone1 = true
-	cumulativeMultipliers.drone = cumulativeMultipliers.drone + 1
-	applySummonGrowth()
-	GG.Roguelike.AddDroneLevel(playerTeamID, true)
-	Spring.Echo("Roguelike: wave 2 time boundary; first drone level unlocked for wave 3")
-	personalEvent("RoguelikeUpgradeApplied", "轨道无人机 I", "第二波时间结束：进入第三波时自动解锁 2 架无人机")
-	sendAcquiredOptions()
-	return true
-end
-
 local function offerUpgradeChoices()
 	local choices = not activeChoiceId and pickRandomChoices(CHOICES_PER_OFFER) or nil
 	choiceIdCounter = choiceIdCounter + 1
@@ -1717,6 +1682,14 @@ local function buyShopItem(itemId, playerID)
 		sendShopResult(false, item, shopLevels[itemId] or 0, 0, "wrong_faction")
 		return
 	end
+	if item.prototypeFaction and getCommanderFaction(playerUnitID) ~= item.prototypeFaction then
+		sendShopResult(false, item, shopLevels[itemId] or 0, 0, "wrong_faction")
+		return
+	end
+	if item.type == "drone" and (not GG.Roguelike or not GG.Roguelike.AddDroneLevel) then
+		sendShopResult(false, item, shopLevels[itemId] or 0, 0, "unavailable")
+		return
+	end
 	if item.type == "factionWeapon" and upgradeCount < item.unlockAt then
 		sendShopResult(false, item, shopLevels[itemId] or 0, 0, "locked")
 		return
@@ -1754,9 +1727,17 @@ local function buyShopItem(itemId, playerID)
 		cumulativeMultipliers.shopHealthBonus = cumulativeMultipliers.shopHealthBonus + item.value
 	elseif item.type == "regenPercent" then
 		cumulativeMultipliers.regenBonus = cumulativeMultipliers.regenBonus + item.value
+	elseif item.type == "damageLifesteal" then
+		cumulativeMultipliers.damageLifesteal = cumulativeMultipliers.damageLifesteal + item.value
 	elseif item.type ~= "weapon" and item.type ~= "weaponExtension" and item.type ~= "factionWeapon"
+		and item.type ~= "multishot"
+		and item.type ~= "drone"
+		and item.type ~= "damageLifesteal"
 		and item.type ~= "supportSkill" then
 		cumulativeMultipliers[item.type] = cumulativeMultipliers[item.type] * item.value
+	end
+	if item.type == "drone" then
+		GG.Roguelike.AddDroneLevel(teamID, true)
 	end
 	applyCommanderStats(playerUnitID, false)
 	if item.type == "regenPercent" then
@@ -1973,9 +1954,6 @@ function gadget:Initialize()
 		processKillCount()
 		-- Spawner 在 70 秒边界、下一波编号递增前调用；旧波敌人仍可存活。
 		-- clearedWave == 2 对应“第二波时间结束、第三波开始”。
-		if tonumber(clearedWave) == 2 then
-			unlockFirstDroneMilestone()
-		end
 		if playerUnitID and spValidUnitID(playerUnitID) then
 			local _, maxHealth = Spring.GetUnitHealth(playerUnitID)
 			if maxHealth then
@@ -2266,9 +2244,6 @@ end
 local function cleanupDamageHealState(frame)
 	if frame - lastDamageHealCleanupFrame < 30 then return end
 	lastDamageHealCleanupFrame = frame
-	for targetID, lastFrame in pairs(lastHitRepairByTarget) do
-		if frame - lastFrame > Game.gameSpeed then lastHitRepairByTarget[targetID] = nil end
-	end
 	for eventID, eventFrame in pairs(damageHealRecentEvents) do
 		if frame - eventFrame > 10 * Game.gameSpeed then damageHealRecentEvents[eventID] = nil end
 	end
@@ -2297,12 +2272,8 @@ local function applyDamageTriggeredHealing(targetID, unitTeam, damage, paralyzer
 	local effectiveDamage = damageHealingRules.EffectiveHealthDamage(context.healthBefore, healthAfter)
 	if effectiveDamage <= 0 then return end
 	local damageKind, attackID = getDamageHealKind(context, targetID)
-	if damageKind == "area" and cumulativeMultipliers.areaLeech <= 0 then return end
-	if damageKind == "dot" and cumulativeMultipliers.dotLeech <= 0 then return end
-	local coefficient = damageHealingRules.DamageCoefficient(damageKind, {
-		area = cumulativeMultipliers.areaLeech, dot = cumulativeMultipliers.dotLeech,
-	})
-	if coefficient <= 0 then return end
+	if damageKind ~= "direct" and damageKind ~= "area" and damageKind ~= "dot"
+		and damageKind ~= "meteor" and damageKind ~= "splitter" then return end
 	local frame = Spring.GetGameFrame()
 	cleanupDamageHealState(frame)
 	local eventIdentity = damageKind == "dot"
@@ -2315,18 +2286,16 @@ local function applyDamageTriggeredHealing(targetID, unitTeam, damage, paralyzer
 	local maxHealth = select(2, Spring.GetUnitHealth(attackerID))
 	local attackerHealth = Spring.GetUnitHealth(attackerID)
 	if not attackerHealth or attackerHealth <= 0 or not maxHealth or maxHealth <= 0 then return end
-	if cumulativeMultipliers.lifeDrain > 0 then
-		local nominal = effectiveDamage * cumulativeMultipliers.lifeDrain * coefficient
-		healCurrentCommander("lifesteal", nominal, { sustained = true, damageTriggered = true })
+	local stealChance = math.max(0, cumulativeMultipliers.lifeStealChance)
+	local guaranteedHeals = math.floor(stealChance)
+	local healCount = guaranteedHeals
+	if math.random() < stealChance - guaranteedHeals then healCount = healCount + 1 end
+	local fixedHeal = 500 + maxHealth * 0.05
+	for _ = 1, healCount do
+		healCurrentCommander("lifesteal", fixedHeal)
 	end
-	if cumulativeMultipliers.hitRepair > 0
-		and (damageKind == "direct" or damageKind == "meteor" or damageKind == "splitter") then
-		local cooldownFrames = math.max(1, math.ceil(Game.gameSpeed * 0.25))
-		if frame - (lastHitRepairByTarget[targetID] or -cooldownFrames) >= cooldownFrames then
-			lastHitRepairByTarget[targetID] = frame
-			healCurrentCommander("hit_repair", maxHealth * cumulativeMultipliers.hitRepair,
-				{ sustained = true, damageTriggered = true })
-		end
+	if cumulativeMultipliers.damageLifesteal > 0 then
+		healCurrentCommander("damage_lifesteal", effectiveDamage * cumulativeMultipliers.damageLifesteal)
 	end
 end
 
@@ -2337,8 +2306,8 @@ function gadget:UnitPreDamaged(unitID, unitDefID, unitTeam, damage, paralyzer, w
 	if explicit or isOwnedCommanderHit(attackerID, attackerTeam) then
 		local state = attackerTeam and statesByTeam[attackerTeam]
 		local hasHealUpgrade = explicit or (state and state.cumulativeMultipliers
-			and (state.cumulativeMultipliers.lifeDrain > 0 or state.cumulativeMultipliers.hitRepair > 0
-				or state.cumulativeMultipliers.areaLeech > 0 or state.cumulativeMultipliers.dotLeech > 0))
+			and (state.cumulativeMultipliers.lifeStealChance > 0
+				or state.cumulativeMultipliers.damageLifesteal > 0))
 		if hasHealUpgrade then
 			local healthBefore = Spring.GetUnitHealth(unitID)
 			if healthBefore and healthBefore > 0 then

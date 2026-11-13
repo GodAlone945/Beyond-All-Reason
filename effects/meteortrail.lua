@@ -1,4 +1,4 @@
-return {
+local effects = {
 
 	meteortrail = {
 
@@ -61,3 +61,22 @@ return {
 		},
 	},
 }
+
+local function deepCopy(value)
+	if type(value) ~= "table" then return value end
+	local copy = {}
+	for key, child in pairs(value) do
+		copy[key] = deepCopy(child)
+	end
+	return copy
+end
+
+-- Keep the stock meteor trail unchanged. Roguelike payloads use a larger, denser variant.
+effects["roguelike-meteortrail"] = deepCopy(effects.meteortrail)
+local trail = effects["roguelike-meteortrail"]
+trail.fireglow.properties.particlesize = 260
+trail.fireglow.properties.particlesizespread = 59
+trail.smoke.properties.particleSize = 22
+trail.smoke.properties.particleSizeSpread = 10
+
+return effects

@@ -7,7 +7,8 @@ const folders = ['luarules/gadgets', 'unitbasedefs', 'weapons', 'effects', 'feat
 const files = ['modoptions.lua', 'gamedata/alldefs_post.lua', 'modules/customcommands.lua',
   'luaui/rml_setup.lua', 'luaui/Widgets/gui_buildmenu.lua',
   'luaui/Widgets/gui_unit_stats.lua', 'scripts/Units/armcom_lus.lua',
-  'luarules/gadgets/raptor_spawner_defense.lua', 'luarules/gadgets/scav_spawner_defense.lua'];
+  'luarules/gadgets/raptor_spawner_defense.lua', 'luarules/gadgets/scav_spawner_defense.lua',
+  'luarules/gadgets/unit_shield_behaviour.lua'];
 for (const folder of folders) {
   for (const file of fs.readdirSync(folder)) {
     if (file.endsWith('.lua') && (folder.includes('RoguelikeDrones') || folder.includes('gui_roguelike') || file.includes('roguelike'))) {

@@ -266,6 +266,10 @@ for unitDefID, unitDef in ipairs(UnitDefs) do
 		and aircraftCanFightGround
 		and not isDrone
 		and not customParams.iscommander
+		and not customParams.isdecoycommander
+		and customParams.subfolder ~= "ArmGantry"
+		and customParams.subfolder ~= "CorGantry"
+		and customParams.subfolder ~= "Legion/T3"
 		and not SUICIDE_UNIT_NAME_SET[unitName]
 		and not (unitDef.canMove and (customParams.unitgroup == "explo" or customParams.instantselfd))
 		and not unitName:find("_scav", 1, true) then
@@ -322,6 +326,19 @@ local MAX_TARGET_ALIVE = 120
 local WAVE_BUDGET_MULTIPLIER = 3
 local MAX_WAVE_BUDGET = 450
 local BATCH_CAP_BY_STAGE = { 8, 12, 18, 24, 30 }
+local SMALL_T3_START = 450
+local SMALL_T3_RAMP = 4 * 70
+local ULTIMATE_T3_RAMP = 3 * 70
+local BOSS_RESPAWN_SECONDS = 90
+local SMALL_T3_POOL = { "armlun", "armmar", "armprowl", "corshiva", "cordemon", "legjav", "legehovertank" }
+local ULTIMATE_T3_POOL = { "armbanth", "armraz", "armthor", "corkarg", "corcat", "corkorg", "legkeres", "legeshotgunmech", "legeallterrainmech" }
+local BOSS_POOLS = {
+	{ "raptor_queen_easy", "armscavengerbossv2" },
+	{ "raptor_queen_normal", "armscavengerbossv2" },
+	{ "raptor_queen_hard", "scavengerbossv4" },
+	{ "raptor_queen_veryhard", "scavengerbossv4" },
+	{ "raptor_queen_epic", "scavengerbossv4" },
+}
 
 local PHASE_COMBAT = 1
 local PHASE_RECOVERY = 3
@@ -358,6 +375,28 @@ local waveHighThreatLimit = 1
 local waveHighThreatSpawned = 0
 local nextSuicideSpawnFrame = 0
 local lastSuicideSpawnFrame = -math.huge
+local smallT3Defs, ultimateT3Defs = {}, {}
+local activeSpecialBosses = {}
+local bossLevel = 1
+local nextBossFrame = math.huge
+
+for _, name in ipairs(SMALL_T3_POOL) do
+	if UnitDefNames[name] then smallT3Defs[#smallT3Defs + 1] = UnitDefNames[name].id end
+end
+for _, name in ipairs(ULTIMATE_T3_POOL) do
+	if UnitDefNames[name] then ultimateT3Defs[#ultimateT3Defs + 1] = UnitDefNames[name].id end
+end
+
+local function t3Shares()
+	local seconds = combatElapsedFrames / GAME_SPEED
+	if seconds < SMALL_T3_START then return 0, 0 end
+	local small = mMin(0.40, 0.10 + 0.30 * (seconds - SMALL_T3_START) / SMALL_T3_RAMP)
+	local ultimate = 0
+	if small >= 0.40 then
+		ultimate = mMin(0.15, 0.05 + 0.10 * (seconds - SMALL_T3_START - SMALL_T3_RAMP) / ULTIMATE_T3_RAMP)
+	end
+	return small, ultimate
+end
 
 -- 构建权重表（用于随机抽取）
 local function buildWeightTable(pool)
@@ -772,6 +811,13 @@ local function spawnNormalBatch(requestedCount)
 		if sx then
 			local unitDefID = suicideUnitDefID
 			if not unitDefID then
+				local smallShare, ultimateShare = t3Shares()
+				local roll = mRandom()
+				local pool = roll < ultimateShare and ultimateT3Defs
+					or (roll < ultimateShare + smallShare and smallT3Defs or nil)
+				if pool and #pool > 0 then unitDefID = pool[mRandom(1, #pool)] end
+			end
+			if not unitDefID then
 				local isRanged = roles[i] == "ranged"
 				local weightTable = isRanged and waveStage.rangedWeightTable or waveStage.closeWeightTable
 				local usedUnitDefs = isRanged and waveUsedRangedUnitDefs or waveUsedCloseUnitDefs
@@ -813,25 +859,30 @@ local function spawnNormalBatch(requestedCount)
 	return spawned
 end
 
-local function spawnWaveBosses()
-	if currentWave % BOSS_WAVE_EVERY ~= 0 or waveSpawnBudgetRemaining <= 0 then return end
-	local bossCount = mMin(mMin(mCeil(currentWave / BOSS_WAVE_EVERY), 3), waveSpawnBudgetRemaining)
-	local elapsedSeconds = combatElapsedFrames / GAME_SPEED
-	for _ = 1, bossCount do
+local function spawnSpecialBosses(frame)
+	local _, ultimateShare = t3Shares()
+	if ultimateShare < 0.15 then return end
+	if nextBossFrame == math.huge then nextBossFrame = frame end
+	if frame < nextBossFrame or next(activeSpecialBosses) then return end
+	local pool = BOSS_POOLS[mMin(bossLevel, #BOSS_POOLS)]
+	local wanted = bossLevel > #BOSS_POOLS and mMin(5, 1 + bossLevel - #BOSS_POOLS) or 1
+	local spawned = 0
+	for _ = 1, wanted do
+		local unitName = pool[mRandom(1, #pool)]
+		local def = UnitDefNames[unitName]
 		local sx, sy, sz = getSpawnPosition()
-		if sx then
-			local unitDefID = pickRandomFromWeight(waveStage.bossWeightTable, waveStage.bossTotalWeight)
-			local unitID = unitDefID and createEnemyUnit(unitDefID, sx, sy, sz, mRandom(0, 3))
-			if unitID then
-				waveSpawnBudgetRemaining = waveSpawnBudgetRemaining - 1
-				waveSpawnCredit = mMax(0, waveSpawnCredit - 1)
-				aliveEnemies[unitID] = true
-				spSetUnitAlwaysVisible(unitID, true)
-				applyEnemyScaling(unitID, elapsedSeconds, true)
-				orderEnemyAttack(unitID)
-			end
+		local unitID = def and sx and createEnemyUnit(def.id, sx, sy, sz, mRandom(0, 3))
+		if unitID then
+			activeSpecialBosses[unitID] = true
+			aliveEnemies[unitID] = true
+			spSetUnitAlwaysVisible(unitID, true)
+			spSetUnitRulesParam(unitID, "roguelike_boss_level", bossLevel, INLOS_ACCESS)
+			applyEnemyScaling(unitID, combatElapsedFrames / GAME_SPEED, true)
+			orderEnemyAttack(unitID)
+			spawned = spawned + 1
 		end
 	end
+	if spawned > 0 then nextBossFrame = math.huge else nextBossFrame = frame + GAME_SPEED end
 end
 
 local function targetAliveAtTime(combatSeconds)
@@ -869,7 +920,6 @@ local function startCombatPhase(frame)
 	waveHighThreatSpawned = 0
 	nextSuicideSpawnFrame = frame + SUICIDE_SPAWN_INTERVAL * GAME_SPEED
 
-	spawnWaveBosses()
 	local initialSpawned = spawnNormalBatch(mMin(waveBatchCap, mMax(0, waveTargetAlive - getAliveEnemyCount())))
     spEcho("Roguelike: wave " .. currentWave .. " initial batch created " .. initialSpawned .. " enemies")
 	nextSpawnPulseFrame = frame + SPAWN_PULSE_INTERVAL * GAME_SPEED
@@ -1010,6 +1060,7 @@ function gadget:GameFrame(frame)
 			return
 		end
 		updateTimedSpawnParameters()
+		spawnSpecialBosses(frame)
 		local spawnPerSecond = mMin(MAX_WAVE_BUDGET,
 			waveTargetAlive * WAVE_BUDGET_MULTIPLIER) / COMBAT_DURATION
 		waveSpawnCredit = mMin(waveBatchCap, waveSpawnCredit + spawnPerSecond)
@@ -1037,6 +1088,13 @@ end
 function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerDefID, attackerTeam, weaponDefID)
 	local deathX, deathY, deathZ = spGetUnitPosition(unitID)
 	aliveSuicideEnemies[unitID] = nil
+	if activeSpecialBosses[unitID] then
+		activeSpecialBosses[unitID] = nil
+		if not next(activeSpecialBosses) then
+			bossLevel = bossLevel + 1
+			nextBossFrame = spGetGameFrame() + BOSS_RESPAWN_SECONDS * GAME_SPEED
+		end
+	end
 	if aliveEnemies[unitID] then
 		aliveEnemies[unitID] = nil
 

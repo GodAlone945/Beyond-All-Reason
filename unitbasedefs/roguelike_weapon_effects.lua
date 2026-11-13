@@ -10,11 +10,13 @@ return {
 		delayed_strike = { chance = 1, radius = 130, damageFraction = 0.45, delayFrames = 30, cooldownFrames = 45, maxTargets = 12 },
 	},
 	shopProjectileEffects = {
+		electric_orb = { upgrade = "electric_orb", effect = "chain", procCoefficient = 1 },
 		plasma_weapon = { upgrade = "plasma_extension", effect = "aftershock" },
 		sniper_weapon = { upgrade = "sniper_extension", effect = "delayed_strike" },
 		barrage_weapon = { upgrade = "barrage_extension", effect = "burn_zone" },
 		shockwave_weapon = { upgrade = "shockwave_extension", effect = "burst" },
 	},
+	electricOrbAura = { radius = 100, tickFrames = 8, damageFraction = 0.08 },
 	testWeapons = {
 		meteor = {
 			command = {
@@ -66,8 +68,9 @@ return {
 	limits = {
 		maxActiveProjectiles = 256,
 		maxActivePerPlayer = 48,
-		maxPendingMeteorsPerPlayer = 16,
-		maxSpawnsPerFrame = 16,
+		maxPendingMeteorsPerPlayer = 18,
+		maxSpawnsPerFrame = 18, -- two co-op players can each spawn a nine-meteor volley in one frame
+		maxMeteorProjectiles = 9,
 		maxDepth = 3,
 		warningFrames = 45,
 		meteorAltitude = 900,

@@ -253,6 +253,8 @@ local spSetUnitRulesParam = Spring.SetUnitRulesParam
 local spGetUnitArmored = Spring.GetUnitArmored
 
 local shieldUnitDefs = {}
+local roguelikePersonalShieldUnitDefs = {}
+local roguelikePersonalShieldHits = {} -- [shieldUnitID][projectileID] = hit frame
 local shieldUnitsData = {}
 local forceDeleteWeapons = {}
 local unitDefIDCache = {}
@@ -358,6 +360,10 @@ for unitDefID, unitDef in pairs(UnitDefs) do
 		local hasWeapons = false
 		for i, weaponsData in pairs(weapons) do
 			wCache[i] = weaponsData.weaponDef
+			local weaponDef = WeaponDefs[weaponsData.weaponDef]
+			if weaponDef and weaponDef.customParams.roguelike_personal_shield then
+				roguelikePersonalShieldUnitDefs[unitDefID] = true
+			end
 			hasWeapons = true
 		end
 		if hasWeapons then
@@ -463,6 +469,7 @@ function gadget:UnitFinished(unitID, unitDefID, unitTeam)
 end
 
 function gadget:UnitDestroyed(unitID, unitDefID, unitTeam, attackerID, attackerDefID, attackerTeam, weaponDefID)
+	roguelikePersonalShieldHits[unitID] = nil
 	local unitData = shieldUnitsData[unitID]
 	if unitData then
 		unitShieldLimits[unitID] = nil
@@ -563,6 +570,14 @@ local shieldCheckEndIndex = 1
 
 function gadget:GameFrame(frame)
 	gameFrame = frame
+	if frame % (Game.gameSpeed * 30) == 0 then
+		for unitID, hits in pairs(roguelikePersonalShieldHits) do
+			for projectileID, hitFrame in pairs(hits) do
+				if hitFrame < frame - Game.gameSpeed * 30 then hits[projectileID] = nil end
+			end
+			if not next(hits) then roguelikePersonalShieldHits[unitID] = nil end
+		end
+	end
 
 	if frame % SHIELD_STATS_INTERVAL == 0 then
 		limitShieldStats()
@@ -758,6 +773,33 @@ function gadget:ShieldPreDamaged(
 )
 	local weaponDefID
 	local shieldData = shieldUnitsData[shieldUnitID]
+	if not shieldData and roguelikePersonalShieldUnitDefs[unitDefIDCache[shieldUnitID]] then
+		-- BAR sets damage.shields to zero for its scripted absorb shields. The
+		-- Roguelike shield is a native repulser, so charge its own power here and
+		-- let the engine perform the actual bounce. Returning true would bypass it.
+		local enabled, power = spGetUnitShieldState(shieldUnitID, shieldWeaponNum)
+		if enabled == false or enabled == 0 or not power or power <= 0 then return true end
+		local damage = 0
+		if proID and proID >= 0 then
+			local hits = roguelikePersonalShieldHits[shieldUnitID]
+			if not hits then
+				hits = {}
+				roguelikePersonalShieldHits[shieldUnitID] = hits
+			end
+			if not hits[proID] then
+				hits[proID] = gameFrame
+				damage = originalShieldDamages[spGetProjectileDefID(proID)] or 0
+			end
+		elseif beamEmitterUnitID then
+			local beamWeapons = unitDefWeaponDefs[unitDefIDCache[beamEmitterUnitID]]
+			local beamWeaponDefID = beamWeapons and beamWeapons[beamEmitterWeaponNum]
+			damage = originalShieldDamages[beamWeaponDefID] or 0
+		end
+		if damage > 0 then
+			spSetUnitShieldState(shieldUnitID, shieldWeaponNum, mathMax(0, power - damage))
+		end
+		return false
+	end
 	if not shieldData or not shieldData.shieldEnabled then
 		return true
 	end

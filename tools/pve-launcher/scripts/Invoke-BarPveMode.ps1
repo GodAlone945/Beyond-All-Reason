@@ -244,6 +244,15 @@ function Launch-DevelopmentGame([string]$dataDirectory) {
 
 $resolvedConfig = Assert-BarClientConfigPath -ConfigPath $ConfigPath
 $data = Split-Path -Parent $resolvedConfig
+$dataDrive = [IO.Path]::GetPathRoot($data)
+if ($dataDrive -ieq 'C:\') {
+    throw "PVE 游戏文件不能写入 C 盘。请先把 BAR 安装到其他盘，再选择该安装目录 data 下的 chobby_config.json：$resolvedConfig"
+}
+$installRoot = Split-Path -Parent $data
+$launcherFiles = @('Beyond-All-Reason.exe', 'bar-launcher.exe', 'spring-launcher.exe')
+if (-not @($launcherFiles | Where-Object { Test-Path -LiteralPath (Join-Path $installRoot $_) -PathType Leaf }).Count) {
+    throw "所选配置不在 BAR 安装目录的 data 文件夹中。请选中与 BAR 启动程序同一安装目录下的 chobby_config.json：$resolvedConfig"
+}
 $store = Join-Path $data 'bar-pve'
 # A local SPADS room can host the BAR-PVE.sdd worktree while release state remains pinned to an older archive.
 if ($Action -in @('Status', 'PreparePve') -and
